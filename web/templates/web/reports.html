@@ -1,0 +1,276 @@
+{% extends "web/base.html" %}
+
+{% block title %}レポート - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">
+                <i class="fas fa-file-alt"></i> レポート
+            </h1>
+            <p class="lead text-muted">学習状況の詳細レポートを生成・閲覧できます</p>
+        </div>
+    </div>
+</div>
+
+<!-- レポート生成 -->
+<div class="row mb-5">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-plus"></i> 新しいレポートを生成</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('generate_report') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exam_type" class="form-label">試験種別</label>
+                            <select class="form-select" id="exam_type" name="exam_type" required>
+                                <option value="FE" selected>基本情報技術者試験</option>
+                                <option value="AP">応用情報技術者試験</option>
+                                <option value="IP">ITパスポート試験</option>
+                                <option value="SG">情報セキュリティマネジメント試験</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="days" class="form-label">対象期間</label>
+                            <select class="form-select" id="days" name="days">
+                                <option value="7">過去7日間</option>
+                                <option value="30" selected>過去30日間</option>
+                                <option value="90">過去90日間</option>
+                                <option value="365">過去1年間</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-chart-line"></i> レポートを生成
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 既存レポート一覧 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-folder-open"></i> 既存レポート</h5>
+            </div>
+            <div class="card-body">
+                {% if report_files %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>レポート名</th>
+                                    <th>種類</th>
+                                    <th>生成日時</th>
+                                    <th>アクション</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for report in report_files %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-file-alt text-primary me-2"></i>
+                                        {{ report.name }}
+                                    </td>
+                                    <td>
+                                        {% if 'comprehensive' in report.name %}
+                                            <span class="badge bg-primary">包括レポート</span>
+                                        {% elif 'session' in report.name %}
+                                            <span class="badge bg-success">セッションレポート</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">その他</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ report.created.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('view_report', filename=report.name) }}" 
+                                           class="btn btn-sm btn-outline-primary me-2" 
+                                           target="_blank">
+                                            <i class="fas fa-eye"></i> 表示
+                                        </a>
+                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                onclick="downloadReport('{{ report.name }}')">
+                                            <i class="fas fa-download"></i> ダウンロード
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-file-alt fa-3x mb-3"></i>
+                        <h5>レポートがありません</h5>
+                        <p>上記のフォームから新しいレポートを生成してください。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- レポートサンプル -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> レポートについて</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">📊 包括レポート</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> 全体的な学習状況の分析</li>
+                            <li><i class="fas fa-check text-success"></i> 分野別パフォーマンス</li>
+                            <li><i class="fas fa-check text-success"></i> 進捗の可視化</li>
+                            <li><i class="fas fa-check text-success"></i> 弱点分析と改善提案</li>
+                            <li><i class="fas fa-check text-success"></i> 学習パターンの分析</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success">📝 セッションレポート</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> 個別セッションの詳細結果</li>
+                            <li><i class="fas fa-check text-success"></i> 回答時間の分析</li>
+                            <li><i class="fas fa-check text-success"></i> 達成事項の記録</li>
+                            <li><i class="fas fa-check text-success"></i> 即座の改善点の提示</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-3 bg-light rounded">
+                    <h6 class="text-info">💡 レポートの特徴</h6>
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-chart-pie fa-2x text-primary mb-2"></i>
+                            <p><strong>インタラクティブ</strong><br>
+                            <small class="text-muted">動的なグラフとチャート</small></p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-mobile-alt fa-2x text-success mb-2"></i>
+                            <p><strong>レスポンシブ</strong><br>
+                            <small class="text-muted">PC・タブレット・スマホ対応</small></p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-print fa-2x text-info mb-2"></i>
+                            <p><strong>印刷対応</strong><br>
+                            <small class="text-muted">きれいな印刷レイアウト</small></p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-share-alt fa-2x text-warning mb-2"></i>
+                            <p><strong>共有可能</strong><br>
+                            <small class="text-muted">HTMLファイルで簡単共有</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ローディング -->
+<div class="loading">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">レポートを生成中...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // レポートダウンロード
+    function downloadReport(filename) {
+        window.open(`/report/${filename}`, '_blank');
+    }
+    
+    // レポート生成フォームの送信
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                showLoading();
+                
+                // フォームデータを確認
+                const formData = new FormData(form);
+                const examType = formData.get('exam_type');
+                const days = formData.get('days');
+                
+                console.log('レポート生成開始:', { examType, days });
+                
+                // Ajax送信
+                fetch('/generate_report', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        alert('レポートが生成されました！');
+                        location.reload();
+                    } else {
+                        alert('レポート生成に失敗しました。');
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    console.error('Error:', error);
+                    alert('エラーが発生しました。');
+                });
+            });
+        }
+        
+        // テーブル行のホバー効果
+        const tableRows = document.querySelectorAll('tbody tr');
+        tableRows.forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#f8f9fa';
+            });
+            row.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '';
+            });
+        });
+        
+        // カードのアニメーション
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+    
+    // 期間選択の変更イベント
+    document.getElementById('days').addEventListener('change', function() {
+        const days = this.value;
+        const descriptions = {
+            '7': '過去1週間の学習データに基づいてレポートを生成します。',
+            '30': '過去1ヶ月の学習データに基づいてレポートを生成します。',
+            '90': '過去3ヶ月の学習データに基づいてレポートを生成します。',
+            '365': '過去1年間の学習データに基づいてレポートを生成します。'
+        };
+        
+        // 説明文を表示（必要に応じて）
+        console.log(descriptions[days]);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends "web/base.html" %}
+
+{% block title %}ホーム - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold text-primary">
+                <i class="fas fa-graduation-cap"></i> 情報技術者試験学習システム
+            </h1>
+            <p class="lead text-muted">効率的な学習で合格を目指しましょう</p>
+        </div>
+    </div>
+</div>
+
+<!-- 統計情報 -->
+<div class="row mb-5">
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); color: #0277bd; border: 1px solid #b3e5fc; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ stats.total_questions or 0 }}</div>
+                <div class="stat-label">総問題数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); color: #2e7d32; border: 1px solid #c8e6c9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ stats.total_correct or 0 }}</div>
+                <div class="stat-label">正解数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); color: #7b1fa2; border: 1px solid #e1bee7; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ (stats.overall_correct_rate * 100)|round(1) if stats.overall_correct_rate else 0 }}</div>
+                <div class="stat-label">正答率 (%)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%); color: #f57c00; border: 1px solid #ffcc80; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ stats.categories_studied or 0 }}</div>
+                <div class="stat-label">学習分野数</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 全体正答率 -->
+{% if stats.overall_correct_rate %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> 全体正答率</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar" 
+                         role="progressbar" 
+                         style="width: 0%"
+                         data-width="{{ (stats.overall_correct_rate * 100)|round(1) }}"
+                         aria-valuenow="{{ (stats.overall_correct_rate * 100)|round(1) }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                        {{ (stats.overall_correct_rate * 100)|round(1) }}%
+                    </div>
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="text-success">
+                            <i class="fas fa-check-circle fa-2x mb-2"></i>
+                            <h6>合格ライン</h6>
+                            <p class="text-muted">60%以上</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-info">
+                            <i class="fas fa-star fa-2x mb-2"></i>
+                            <h6>現在の成績</h6>
+                            <p class="text-muted">
+                                {% set rate = (stats.overall_correct_rate * 100)|round(1) if stats.overall_correct_rate else 0 %}
+                                {% if rate >= 80 %}
+                                    <span class="badge bg-success">優秀</span>
+                                {% elif rate >= 60 %}
+                                    <span class="badge bg-info">合格圏内</span>
+                                {% elif rate >= 40 %}
+                                    <span class="badge bg-warning">要努力</span>
+                                {% else %}
+                                    <span class="badge bg-danger">基礎固め必要</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-warning">
+                            <i class="fas fa-target fa-2x mb-2"></i>
+                            <h6>目標まで</h6>
+                            <p class="text-muted">
+                                {% set remaining = 60 - rate %}
+                                {% if remaining <= 0 %}
+                                    達成済み！
+                                {% else %}
+                                    あと {{ remaining|round(1) }}%
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- クイックアクション -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-rocket"></i> クイックアクション</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <a href="{{ url_for('study') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-book"></i><br>
+                            学習開始
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <a href="{{ url_for('study') }}?mode=mock_exam" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-clipboard-check"></i><br>
+                            模擬試験
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <a href="{{ url_for('progress') }}" class="btn btn-info btn-lg w-100">
+                            <i class="fas fa-chart-line"></i><br>
+                            進捗確認
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <a href="{{ url_for('reports') }}" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-file-alt"></i><br>
+                            レポート
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 推奨事項 -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-lightbulb"></i> 学習推奨事項</h5>
+            </div>
+            <div class="card-body">
+                {% if recommendations %}
+                    {% for rec in recommendations %}
+                    <div class="alert alert-{{ 'danger' if rec.priority == 'high' else 'warning' if rec.priority == 'medium' else 'info' }} d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="fas fa-{{ 'exclamation-triangle' if rec.priority == 'high' else 'info-circle' }}"></i>
+                        </div>
+                        <div>
+                            <strong>{{ rec.title }}</strong><br>
+                            <small>{{ rec.description }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clipboard-check fa-3x mb-3"></i>
+                        <p>まず学習を開始して、推奨事項を確認しましょう。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 最近の学習活動 -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history"></i> 最近の学習活動</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_activity %}
+                    <div class="list-group list-group-flush">
+                        {% for activity in recent_activity %}
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ activity.category or 'その他' }}</h6>
+                                    <small class="text-muted">{{ activity.attempt_date[:19] }}</small>
+                                </div>
+                                <div>
+                                    {% if activity.is_correct %}
+                                        <span class="badge bg-success">正解</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">不正解</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clipboard fa-3x mb-3"></i>
+                        <p>学習活動の記録がありません。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 学習のコツ -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tips"></i> 学習のコツ</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-calendar-alt fa-3x text-primary mb-3"></i>
+                            <h6>継続的な学習</h6>
+                            <p class="text-muted">毎日少しずつでも継続することが合格への近道です。</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-chart-bar fa-3x text-success mb-3"></i>
+                            <h6>弱点の克服</h6>
+                            <p class="text-muted">統計機能を活用して、弱点分野を重点的に学習しましょう。</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-stopwatch fa-3x text-info mb-3"></i>
+                            <h6>時間管理</h6>
+                            <p class="text-muted">模擬試験で時間配分を練習し、本番に備えましょう。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ローディング -->
+<div class="loading">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">処理中...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ページロード時のアニメーション
+    document.addEventListener('DOMContentLoaded', function() {
+        // カードのフェードイン
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %}

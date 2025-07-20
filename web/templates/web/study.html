@@ -1,0 +1,283 @@
+{% extends "web/base.html" %}
+
+{% block title %}学習 - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">
+                <i class="fas fa-book"></i> 学習セッション
+            </h1>
+            <p class="lead text-muted">学習モードを選択して開始しましょう</p>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> 学習設定</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('start_session') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exam_type" class="form-label">試験種別</label>
+                            <select class="form-select" id="exam_type" name="exam_type" required>
+                                <option value="FE" selected>基本情報技術者試験</option>
+                                <option value="AP">応用情報技術者試験</option>
+                                <option value="IP">ITパスポート試験</option>
+                                <option value="SG">情報セキュリティマネジメント試験</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="mode" class="form-label">学習モード</label>
+                            <select class="form-select" id="mode" name="mode" required onchange="updateModeSettings()">
+                                <option value="practice" selected>練習モード</option>
+                                <option value="mock_exam">模擬試験</option>
+                                <option value="review">復習モード</option>
+                                <option value="weak_area">弱点克服モード</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="count" class="form-label">問題数</label>
+                            <select class="form-select" id="count" name="count">
+                                <option value="10">10問</option>
+                                <option value="20" selected>20問</option>
+                                <option value="30">30問</option>
+                                <option value="50">50問</option>
+                                <option value="80">80問（本番同様）</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="category" class="form-label">分野（オプション）</label>
+                            <select class="form-select" id="category" name="category">
+                                <option value="">全分野</option>
+                                <option value="テクノロジ系">テクノロジ系</option>
+                                <option value="マネジメント系">マネジメント系</option>
+                                <option value="ストラテジ系">ストラテジ系</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- モード別説明 -->
+                    <div class="alert alert-info" id="mode-description">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>練習モード:</strong> 基本的な学習モードです。指定した問題数で学習できます。
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-play"></i> 学習開始
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 学習モード説明 -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-question-circle"></i> 学習モードについて</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-primary">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary">
+                                    <i class="fas fa-book"></i> 練習モード
+                                </h6>
+                                <p class="card-text">
+                                    日常的な学習に適したモードです。問題数や分野を自由に選択できます。
+                                </p>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success"></i> 問題数を自由に選択</li>
+                                    <li><i class="fas fa-check text-success"></i> 分野を絞って学習</li>
+                                    <li><i class="fas fa-check text-success"></i> 解説を即座に確認</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-success">
+                            <div class="card-body">
+                                <h6 class="card-title text-success">
+                                    <i class="fas fa-clipboard-check"></i> 模擬試験
+                                </h6>
+                                <p class="card-text">
+                                    本番と同じ80問で実力を測定できます。時間制限もあります。
+                                </p>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success"></i> 本番同様の80問</li>
+                                    <li><i class="fas fa-check text-success"></i> 時間制限あり</li>
+                                    <li><i class="fas fa-check text-success"></i> 総合的な実力測定</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <h6 class="card-title text-info">
+                                    <i class="fas fa-redo"></i> 復習モード
+                                </h6>
+                                <p class="card-text">
+                                    これまでに間違えた問題を中心に復習できます。
+                                </p>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success"></i> 間違えた問題を再出題</li>
+                                    <li><i class="fas fa-check text-success"></i> 理解度向上に最適</li>
+                                    <li><i class="fas fa-check text-success"></i> 効率的な復習</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-warning">
+                            <div class="card-body">
+                                <h6 class="card-title text-warning">
+                                    <i class="fas fa-target"></i> 弱点克服モード
+                                </h6>
+                                <p class="card-text">
+                                    統計データに基づいて、苦手分野を重点的に学習できます。
+                                </p>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success"></i> 弱点分野を自動特定</li>
+                                    <li><i class="fas fa-check text-success"></i> 効率的な苦手克服</li>
+                                    <li><i class="fas fa-check text-success"></i> 個別最適化された学習</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 学習のポイント -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-lightbulb"></i> 学習のポイント</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-clock fa-3x text-primary mb-3"></i>
+                        <h6>時間を意識する</h6>
+                        <p class="text-muted">本番では1問約1分。時間を意識して解答しましょう。</p>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-think fa-3x text-success mb-3"></i>
+                        <h6>考える癖をつける</h6>
+                        <p class="text-muted">答えだけでなく、なぜその答えになるのかを考えましょう。</p>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-repeat fa-3x text-info mb-3"></i>
+                        <h6>継続的な学習</h6>
+                        <p class="text-muted">毎日少しずつでも継続することが重要です。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ローディング -->
+<div class="loading">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">学習セッションを準備中...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateModeSettings() {
+        const mode = document.getElementById('mode').value;
+        const count = document.getElementById('count');
+        const category = document.getElementById('category');
+        const description = document.getElementById('mode-description');
+        
+        // モードに応じた設定を更新
+        switch(mode) {
+            case 'practice':
+                count.disabled = false;
+                category.disabled = false;
+                description.innerHTML = `
+                    <i class="fas fa-info-circle"></i>
+                    <strong>練習モード:</strong> 基本的な学習モードです。問題数や分野を自由に選択できます。
+                `;
+                description.className = 'alert alert-info';
+                break;
+                
+            case 'mock_exam':
+                count.value = '80';
+                count.disabled = true;
+                category.value = '';
+                category.disabled = true;
+                description.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>模擬試験:</strong> 本番と同じ80問で実力を測定します。全分野から出題されます。
+                `;
+                description.className = 'alert alert-warning';
+                break;
+                
+            case 'review':
+                count.disabled = false;
+                category.disabled = false;
+                description.innerHTML = `
+                    <i class="fas fa-info-circle"></i>
+                    <strong>復習モード:</strong> これまでに間違えた問題を中心に復習できます。
+                `;
+                description.className = 'alert alert-info';
+                break;
+                
+            case 'weak_area':
+                count.disabled = false;
+                category.disabled = true;
+                category.value = '';
+                description.innerHTML = `
+                    <i class="fas fa-target"></i>
+                    <strong>弱点克服モード:</strong> 統計データに基づいて、苦手分野を重点的に学習できます。
+                `;
+                description.className = 'alert alert-warning';
+                break;
+        }
+    }
+    
+    // ページロード時のアニメーション
+    document.addEventListener('DOMContentLoaded', function() {
+        // カードのアニメーション
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %}

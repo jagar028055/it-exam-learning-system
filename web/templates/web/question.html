@@ -1,0 +1,325 @@
+{% extends "web/base.html" %}
+
+{% block title %}問題 {{ question_number }} - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- 進捗表示 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle"></i> 
+                        問題 {{ question_number }} / {{ total_questions }}
+                    </h5>
+                    <div>
+                        <span class="badge bg-primary">{{ question.category or 'その他' }}</span>
+                        {% if question.difficulty_level %}
+                            <span class="badge bg-secondary">
+                                難易度 {{ question.difficulty_level }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="progress mt-3">
+                    <div class="progress-bar" 
+                         role="progressbar" 
+                         style="width: {{ (question_number / total_questions * 100)|round(1) }}%"
+                         aria-valuenow="{{ (question_number / total_questions * 100)|round(1) }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                        {{ (question_number / total_questions * 100)|round(1) }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 問題カード -->
+        <div class="question-card">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">問題文</h5>
+                    <p class="card-text" style="font-size: 1.1em; line-height: 1.6;">
+                        {{ question.question_text }}
+                    </p>
+                    
+                    <hr>
+                    
+                    <h6 class="mb-3">選択肢</h6>
+                    <div id="choices">
+                        {% for choice in question.choices %}
+                        <button type="button" 
+                                class="choice-btn" 
+                                data-choice="{{ loop.index }}"
+                                onclick="selectChoice({{ loop.index }})">
+                            <span class="choice-number">{{ loop.index }}.</span>
+                            {{ choice }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mt-4 text-center">
+                        <button type="button" 
+                                class="btn btn-primary btn-lg" 
+                                id="submit-btn" 
+                                onclick="submitAnswer()" 
+                                disabled>
+                            <i class="fas fa-check"></i> 回答
+                        </button>
+                        
+                        <button type="button" 
+                                class="btn btn-secondary btn-lg ms-2" 
+                                onclick="skipQuestion()">
+                            <i class="fas fa-forward"></i> スキップ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 結果表示エリア -->
+        <div id="result-area" class="mt-4" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div id="result-content"></div>
+                    
+                    <div class="mt-4 text-center">
+                        <button type="button" 
+                                class="btn btn-success btn-lg" 
+                                onclick="nextQuestion()" 
+                                id="next-btn">
+                            <i class="fas fa-arrow-right"></i> 次の問題
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ローディング -->
+<div class="loading">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">回答を処理中...</p>
+</div>
+
+<!-- 時間表示 -->
+<div class="position-fixed top-0 end-0 m-3">
+    <div class="card">
+        <div class="card-body p-2">
+            <small class="text-muted">
+                <i class="fas fa-clock"></i> 
+                <span id="timer">00:00</span>
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedChoice = null;
+    let startTime = Date.now();
+    let timerInterval;
+    
+    // タイマー開始
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('timer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+    
+    // 選択肢を選択
+    function selectChoice(choice) {
+        // 全ての選択肢のスタイルをリセット
+        document.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        
+        // 選択された選択肢にスタイルを適用
+        document.querySelector(`[data-choice="${choice}"]`).classList.add('selected');
+        
+        selectedChoice = choice;
+        document.getElementById('submit-btn').disabled = false;
+    }
+    
+    // 回答を送信
+    function submitAnswer() {
+        if (!selectedChoice) {
+            alert('選択肢を選んでください。');
+            return;
+        }
+        
+        showLoading();
+        
+        // 回答時間を計算
+        const responseTime = Math.floor((Date.now() - startTime) / 1000);
+        
+        // 回答を送信
+        fetch('/answer', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `answer=${selectedChoice}&response_time=${responseTime}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            showResult(data);
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            alert('エラーが発生しました。');
+        });
+    }
+    
+    // 問題をスキップ
+    function skipQuestion() {
+        if (confirm('この問題をスキップしますか？')) {
+            selectedChoice = -1; // スキップを示す値
+            submitAnswer();
+        }
+    }
+    
+    // 結果を表示
+    function showResult(data) {
+        const resultArea = document.getElementById('result-area');
+        const resultContent = document.getElementById('result-content');
+        
+        // 選択肢を無効化
+        document.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.disabled = true;
+        });
+        
+        // 回答ボタンを無効化
+        document.getElementById('submit-btn').disabled = true;
+        
+        // 正解の選択肢をハイライト
+        document.querySelector(`[data-choice="${data.correct_answer}"]`).style.backgroundColor = '#d4edda';
+        document.querySelector(`[data-choice="${data.correct_answer}"]`).style.borderColor = '#28a745';
+        
+        // 不正解の場合、選択した選択肢を赤色でハイライト
+        if (!data.is_correct && selectedChoice !== -1) {
+            document.querySelector(`[data-choice="${selectedChoice}"]`).style.backgroundColor = '#f8d7da';
+            document.querySelector(`[data-choice="${selectedChoice}"]`).style.borderColor = '#dc3545';
+        }
+        
+        // 結果メッセージ
+        let resultHTML = '';
+        if (selectedChoice === -1) {
+            resultHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-forward"></i> 
+                    <strong>スキップしました</strong><br>
+                    正解は ${data.correct_answer} です。
+                </div>
+            `;
+        } else if (data.is_correct) {
+            resultHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i> 
+                    <strong>正解です！</strong><br>
+                    素晴らしい！
+                </div>
+            `;
+        } else {
+            resultHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle"></i> 
+                    <strong>不正解です</strong><br>
+                    正解は ${data.correct_answer} です。
+                </div>
+            `;
+        }
+        
+        // 解説があれば表示
+        if (data.explanation) {
+            resultHTML += `
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb"></i> 
+                    <strong>解説:</strong><br>
+                    ${data.explanation}
+                </div>
+            `;
+        }
+        
+        resultContent.innerHTML = resultHTML;
+        resultArea.style.display = 'block';
+        
+        // 最後の問題の場合、ボタンテキストを変更
+        if (data.is_last_question) {
+            document.getElementById('next-btn').innerHTML = 
+                '<i class="fas fa-flag-checkered"></i> 結果を見る';
+        }
+        
+        // 結果エリアにスクロール
+        resultArea.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    // 次の問題へ
+    function nextQuestion() {
+        showLoading();
+        
+        // 最後の問題の場合は結果ページへ
+        if (document.getElementById('next-btn').innerHTML.includes('結果を見る')) {
+            window.location.href = '/session_result';
+        } else {
+            window.location.href = '/question';
+        }
+    }
+    
+    // キーボードショートカット
+    document.addEventListener('keydown', function(e) {
+        // 数字キーで選択肢を選択
+        if (e.key >= '1' && e.key <= '9') {
+            const choice = parseInt(e.key);
+            if (choice <= {{ question.choices|length }}) {
+                selectChoice(choice);
+            }
+        }
+        
+        // Enterキーで回答
+        if (e.key === 'Enter' && selectedChoice && !document.getElementById('submit-btn').disabled) {
+            submitAnswer();
+        }
+        
+        // Spaceキーで次の問題へ
+        if (e.key === ' ' && document.getElementById('result-area').style.display !== 'none') {
+            e.preventDefault();
+            nextQuestion();
+        }
+    });
+    
+    // ページロード時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+        startTimer();
+        
+        // 問題カードのアニメーション
+        const questionCard = document.querySelector('.question-card');
+        questionCard.style.opacity = '0';
+        questionCard.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            questionCard.style.transition = 'all 0.5s ease';
+            questionCard.style.opacity = '1';
+            questionCard.style.transform = 'translateY(0)';
+        }, 100);
+    });
+    
+    // ページを離れる前の警告
+    window.addEventListener('beforeunload', function(e) {
+        e.preventDefault();
+        e.returnValue = '';
+    });
+</script>
+{% endblock %}

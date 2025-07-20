@@ -1,0 +1,331 @@
+{% extends "web/base.html" %}
+
+{% block title %}設定 - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">
+                <i class="fas fa-cog"></i> 設定
+            </h1>
+            <p class="lead text-muted">システム設定とデータベース管理</p>
+        </div>
+    </div>
+</div>
+
+<!-- データベース情報 -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-database"></i> データベース情報</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6">
+                        <div class="card text-center" style="background: linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); color: #0277bd; border: 1px solid #b3e5fc; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+                            <div class="card-body">
+                                <div class="h4">{{ db_info.questions_count }}</div>
+                                <div class="small">問題数</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="card text-center" style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); color: #2e7d32; border: 1px solid #c8e6c9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+                            <div class="card-body">
+                                <div class="h4">{{ db_info.learning_records_count }}</div>
+                                <div class="small">学習記録</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="card text-center" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); color: #7b1fa2; border: 1px solid #e1bee7; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+                            <div class="card-body">
+                                <div class="h4">{{ db_info.study_sessions_count }}</div>
+                                <div class="small">セッション数</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="card text-center" style="background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%); color: #f57c00; border: 1px solid #ffcc80; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+                            <div class="card-body">
+                                <div class="h4">{{ (db_info.file_size / 1024 / 1024)|round(1) }}MB</div>
+                                <div class="small">ファイルサイズ</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100" onclick="backupDatabase()">
+                                <i class="fas fa-save"></i> バックアップ作成
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-info w-100" onclick="optimizeDatabase()">
+                                <i class="fas fa-tools"></i> データベース最適化
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-secondary w-100" onclick="showDatabaseInfo()">
+                                <i class="fas fa-info-circle"></i> 詳細情報
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- データ取得 -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-download"></i> データ取得</h5>
+            </div>
+            <div class="card-body">
+                <form id="fetchDataForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exam_type" class="form-label">試験種別</label>
+                            <select class="form-select" id="exam_type" name="exam_type" required>
+                                <option value="FE" selected>基本情報技術者試験</option>
+                                <option value="AP">応用情報技術者試験</option>
+                                <option value="IP">ITパスポート試験</option>
+                                <option value="SG">情報セキュリティマネジメント試験</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="year" class="form-label">年度</label>
+                            <select class="form-select" id="year" name="year">
+                                <option value="all">全年度</option>
+                                <option value="2023" selected>2023年度</option>
+                                <option value="2022">2022年度</option>
+                                <option value="2021">2021年度</option>
+                                <option value="2020">2020年度</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-cloud-download-alt"></i> データを取得
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-light rounded">
+                    <h6 class="text-info">📋 データ取得について</h6>
+                    <ul class="mb-0">
+                        <li>IPA（独立行政法人情報処理推進機構）の公開データから問題を取得します</li>
+                        <li>著作権に配慮し、適切な範囲での利用を心がけます</li>
+                        <li>取得したデータは学習目的でのみ使用されます</li>
+                        <li>インターネット接続が必要です</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- システム設定 -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cogs"></i> システム設定</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <tbody>
+                            <tr>
+                                <th style="width: 30%;">プロジェクトルート</th>
+                                <td><code>{{ settings_info.project_root }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>データベースパス</th>
+                                <td><code>{{ settings_info.database_path }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>レポート出力ディレクトリ</th>
+                                <td><code>{{ settings_info.report_output_dir }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>ログレベル</th>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if settings_info.log_level == 'INFO' else 'warning' }}">
+                                        {{ settings_info.log_level }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- システム情報 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info"></i> システム情報</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">📊 バージョン情報</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>システムバージョン:</strong> v2.0.0</li>
+                            <li><strong>データベースバージョン:</strong> SQLite 3.36.0</li>
+                            <li><strong>最終更新:</strong> {{ db_info.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success">🔧 技術仕様</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Python:</strong> 3.9+</li>
+                            <li><strong>Flask:</strong> 2.3.3</li>
+                            <li><strong>Bootstrap:</strong> 5.1.3</li>
+                            <li><strong>Chart.js:</strong> 3.9.1</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-3 bg-light rounded">
+                    <h6 class="text-warning">⚠️ デモモードについて</h6>
+                    <p class="mb-0">
+                        現在、デモンストレーション用のモードで動作しています。
+                        実際の運用には、完全なセットアップと設定が必要です。
+                        詳細については、<code>WEB_SETUP.md</code> を参照してください。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ローディング -->
+<div class="loading">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">処理中...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // データ取得フォーム
+    document.getElementById('fetchDataForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        showLoading();
+        
+        const formData = new FormData(this);
+        
+        fetch('/settings/fetch_data', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                alert(`✅ ${data.message}\n取得問題数: ${data.fetched_questions}\n新規問題数: ${data.new_questions}`);
+            } else {
+                alert('❌ データ取得に失敗しました。');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            alert('❌ エラーが発生しました。');
+        });
+    });
+    
+    // バックアップ作成
+    function backupDatabase() {
+        if (confirm('データベースのバックアップを作成しますか？')) {
+            showLoading();
+            
+            fetch('/settings/backup', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                } else {
+                    alert('❌ バックアップに失敗しました。');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('❌ エラーが発生しました。');
+            });
+        }
+    }
+    
+    // データベース最適化
+    function optimizeDatabase() {
+        if (confirm('データベースを最適化しますか？\n（処理に時間がかかる場合があります）')) {
+            showLoading();
+            
+            fetch('/settings/optimize', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert(`✅ ${data.message}\n容量削減: ${data.old_size} → ${data.new_size} (${data.improvement}改善)`);
+                } else {
+                    alert('❌ 最適化に失敗しました。');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('❌ エラーが発生しました。');
+            });
+        }
+    }
+    
+    // データベース詳細情報
+    function showDatabaseInfo() {
+        alert(`📊 データベース詳細情報\n\n` +
+              `問題数: {{ db_info.questions_count }}\n` +
+              `学習記録数: {{ db_info.learning_records_count }}\n` +
+              `セッション数: {{ db_info.study_sessions_count }}\n` +
+              `ファイルサイズ: {{ (db_info.file_size / 1024 / 1024)|round(1) }}MB\n` +
+              `最終更新: {{ db_info.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}`);
+    }
+    
+    // ページロード時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+        // カードのアニメーション
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %}

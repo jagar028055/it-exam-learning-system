@@ -1,0 +1,698 @@
+"""
+情報技術者試験学習システム - データベース管理モジュール
+"""
+
+import sqlite3
+import json
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
+from contextlib import contextmanager
+
+from config import config
+from utils import Logger, FileUtils, ValidationUtils, DataError
+
+class DatabaseManager:
+    """SQLiteデータベース管理クラス"""
+    
+    def __init__(self, db_path: Path = None):
+        """
+        初期化
+        
+        Args:
+            db_path: データベースファイルパス
+        """
+        self.db_path = db_path or config.DATABASE_PATH
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # ログ設定
+        self.logger = Logger.setup_logger(
+            "DatabaseManager",
+            config.LOG_FILE,
+            config.LOG_LEVEL
+        )
+        
+        # データベース初期化
+        self.init_database()
+    
+    def init_database(self):
+        """データベースを初期化"""
+        self.logger.info("データベースを初期化中...")
+        
+        with self.get_connection() as conn:
+            # テーブル作成
+            self._create_tables(conn)
+            
+            # 初期データ投入
+            self._insert_initial_data(conn)
+            
+            # インデックス作成
+            self._create_indexes(conn)
+            
+        self.logger.info("データベース初期化完了")
+    
+    @contextmanager
+    def get_connection(self):
+        """データベース接続のコンテキストマネージャー"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+        
+        try:
+            yield conn
+        except Exception as e:
+            conn.rollback()
+            self.logger.error(f"データベースエラー: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def _create_tables(self, conn: sqlite3.Connection):
+        """テーブルを作成"""
+        # 試験区分テーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS exam_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(100) NOT NULL,
+                code VARCHAR(10) NOT NULL UNIQUE,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 問題テーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exam_category_id INTEGER,
+                year INTEGER NOT NULL,
+                question_number INTEGER NOT NULL,
+                question_text TEXT NOT NULL,
+                choices TEXT NOT NULL,  -- JSON形式で保存
+                correct_answer INTEGER,
+                explanation TEXT,
+                category VARCHAR(100),
+                subcategory VARCHAR(100),
+                difficulty_level INTEGER DEFAULT 2,
+                source_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (exam_category_id) REFERENCES exam_categories(id),
+                UNIQUE(exam_category_id, year, question_number)
+            )
+        """)
+        
+        # 学習記録テーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS learning_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id INTEGER,
+                user_answer INTEGER,
+                is_correct BOOLEAN NOT NULL,
+                attempt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                response_time INTEGER,  -- 秒単位
+                study_mode VARCHAR(50),  -- 'practice', 'mock_exam', 'review'
+                notes TEXT,
+                FOREIGN KEY (question_id) REFERENCES questions(id)
+            )
+        """)
+        
+        # 学習セッションテーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS study_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_name VARCHAR(200),
+                exam_category_id INTEGER,
+                study_mode VARCHAR(50),
+                total_questions INTEGER,
+                correct_answers INTEGER,
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                duration INTEGER,  -- 秒単位
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (exam_category_id) REFERENCES exam_categories(id)
+            )
+        """)
+        
+        # 学習統計テーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS study_statistics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exam_category_id INTEGER,
+                category VARCHAR(100),
+                total_questions INTEGER DEFAULT 0,
+                correct_answers INTEGER DEFAULT 0,
+                incorrect_answers INTEGER DEFAULT 0,
+                average_response_time REAL DEFAULT 0,
+                last_study_date TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (exam_category_id) REFERENCES exam_categories(id)
+            )
+        """)
+        
+        # 設定テーブル
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key VARCHAR(100) NOT NULL UNIQUE,
+                setting_value TEXT,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        conn.commit()
+    
+    def _create_indexes(self, conn: sqlite3.Connection):
+        """インデックスを作成"""
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_questions_exam_year ON questions(exam_category_id, year)",
+            "CREATE INDEX IF NOT EXISTS idx_questions_category ON questions(category)",
+            "CREATE INDEX IF NOT EXISTS idx_learning_records_question ON learning_records(question_id)",
+            "CREATE INDEX IF NOT EXISTS idx_learning_records_date ON learning_records(attempt_date)",
+            "CREATE INDEX IF NOT EXISTS idx_study_sessions_exam ON study_sessions(exam_category_id)",
+            "CREATE INDEX IF NOT EXISTS idx_study_statistics_exam ON study_statistics(exam_category_id)"
+        ]
+        
+        for index_sql in indexes:
+            conn.execute(index_sql)
+        
+        conn.commit()
+    
+    def _insert_initial_data(self, conn: sqlite3.Connection):
+        """初期データを投入"""
+        # 試験区分の初期データ
+        exam_categories = [
+            ("基本情報技術者試験", "FE", "ITエンジニアの登竜門"),
+            ("応用情報技術者試験", "AP", "ワンランク上のITエンジニア"),
+            ("ITパスポート試験", "IP", "ITを利活用するすべての社会人・学生"),
+            ("情報セキュリティマネジメント試験", "SG", "情報セキュリティの基本")
+        ]
+        
+        for name, code, description in exam_categories:
+            conn.execute("""
+                INSERT OR IGNORE INTO exam_categories (name, code, description)
+                VALUES (?, ?, ?)
+            """, (name, code, description))
+        
+        # システム設定の初期データ
+        settings = [
+            ("last_update", "", "最終更新日時"),
+            ("data_version", "1.0", "データバージョン"),
+            ("backup_interval", "7", "バックアップ間隔（日）")
+        ]
+        
+        for key, value, description in settings:
+            conn.execute("""
+                INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
+                VALUES (?, ?, ?)
+            """, (key, value, description))
+        
+        conn.commit()
+    
+    # 問題関連のCRUD操作
+    def insert_question(self, question_data: Dict) -> int:
+        """問題を追加"""
+        # バリデーション
+        is_valid, errors = ValidationUtils.validate_question_data(question_data)
+        if not is_valid:
+            raise DataError(f"問題データが無効: {errors}")
+        
+        with self.get_connection() as conn:
+            # 試験区分IDを取得
+            exam_category_id = self._get_exam_category_id(conn, question_data.get('exam_type', 'FE'))
+            
+            # 選択肢をJSON形式に変換
+            choices_json = json.dumps(question_data['choices'], ensure_ascii=False)
+            
+            cursor = conn.execute("""
+                INSERT INTO questions (
+                    exam_category_id, year, question_number, question_text,
+                    choices, correct_answer, explanation, category, subcategory,
+                    difficulty_level, source_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                exam_category_id,
+                question_data.get('year'),
+                question_data.get('question_number'),
+                question_data['question_text'],
+                choices_json,
+                question_data.get('correct_answer'),
+                question_data.get('explanation'),
+                question_data.get('category'),
+                question_data.get('subcategory'),
+                question_data.get('difficulty_level', 2),
+                question_data.get('source_url')
+            ))
+            
+            question_id = cursor.lastrowid
+            conn.commit()
+            
+            self.logger.info(f"問題を追加: ID={question_id}")
+            return question_id
+    
+    def get_question(self, question_id: int) -> Optional[Dict]:
+        """問題を取得"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT q.*, ec.name as exam_name, ec.code as exam_code
+                FROM questions q
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                WHERE q.id = ?
+            """, (question_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            question = dict(row)
+            question['choices'] = json.loads(question['choices'])
+            return question
+    
+    def update_question(self, question_id: int, question_data: Dict):
+        """問題を更新"""
+        with self.get_connection() as conn:
+            # 更新可能なフィールドを指定
+            update_fields = [
+                'question_text', 'choices', 'correct_answer', 'explanation',
+                'category', 'subcategory', 'difficulty_level'
+            ]
+            
+            set_clause = []
+            values = []
+            
+            for field in update_fields:
+                if field in question_data:
+                    if field == 'choices':
+                        set_clause.append(f"{field} = ?")
+                        values.append(json.dumps(question_data[field], ensure_ascii=False))
+                    else:
+                        set_clause.append(f"{field} = ?")
+                        values.append(question_data[field])
+            
+            if set_clause:
+                set_clause.append("updated_at = CURRENT_TIMESTAMP")
+                values.append(question_id)
+                
+                sql = f"UPDATE questions SET {', '.join(set_clause)} WHERE id = ?"
+                conn.execute(sql, values)
+                conn.commit()
+                
+                self.logger.info(f"問題を更新: ID={question_id}")
+    
+    def delete_question(self, question_id: int):
+        """問題を削除"""
+        with self.get_connection() as conn:
+            # 関連する学習記録も削除
+            conn.execute("DELETE FROM learning_records WHERE question_id = ?", (question_id,))
+            conn.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+            conn.commit()
+            
+            self.logger.info(f"問題を削除: ID={question_id}")
+    
+    def get_questions(self, exam_type: str = None, year: int = None, 
+                     category: str = None, limit: int = None) -> List[Dict]:
+        """問題リストを取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT q.*, ec.name as exam_name, ec.code as exam_code
+                FROM questions q
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                WHERE 1=1
+            """
+            params = []
+            
+            if exam_type:
+                sql += " AND ec.code = ?"
+                params.append(exam_type)
+            
+            if year:
+                sql += " AND q.year = ?"
+                params.append(year)
+            
+            if category:
+                sql += " AND q.category = ?"
+                params.append(category)
+            
+            sql += " ORDER BY q.year DESC, q.question_number ASC"
+            
+            if limit:
+                sql += " LIMIT ?"
+                params.append(limit)
+            
+            cursor = conn.execute(sql, params)
+            questions = []
+            
+            for row in cursor.fetchall():
+                question = dict(row)
+                question['choices'] = json.loads(question['choices'])
+                questions.append(question)
+            
+            return questions
+    
+    def get_random_questions(self, exam_type: str = None, category: str = None,
+                           count: int = 20) -> List[Dict]:
+        """ランダムな問題を取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT q.*, ec.name as exam_name, ec.code as exam_code
+                FROM questions q
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                WHERE q.correct_answer IS NOT NULL
+            """
+            params = []
+            
+            if exam_type:
+                sql += " AND ec.code = ?"
+                params.append(exam_type)
+            
+            if category:
+                sql += " AND q.category = ?"
+                params.append(category)
+            
+            sql += " ORDER BY RANDOM() LIMIT ?"
+            params.append(count)
+            
+            cursor = conn.execute(sql, params)
+            questions = []
+            
+            for row in cursor.fetchall():
+                question = dict(row)
+                question['choices'] = json.loads(question['choices'])
+                questions.append(question)
+            
+            return questions
+    
+    # 学習記録関連の操作
+    def record_answer(self, question_id: int, user_answer: int, is_correct: bool,
+                     response_time: int = None, study_mode: str = 'practice',
+                     notes: str = None) -> int:
+        """回答を記録"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO learning_records (
+                    question_id, user_answer, is_correct, response_time, 
+                    study_mode, notes
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (question_id, user_answer, is_correct, response_time, study_mode, notes))
+            
+            record_id = cursor.lastrowid
+            conn.commit()
+            
+            # 統計を更新
+            self._update_statistics(conn, question_id, is_correct, response_time)
+            
+            return record_id
+    
+    def get_learning_records(self, question_id: int = None, 
+                           start_date: datetime = None, end_date: datetime = None,
+                           limit: int = None) -> List[Dict]:
+        """学習記録を取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT lr.*, q.question_text, q.category, ec.name as exam_name
+                FROM learning_records lr
+                JOIN questions q ON lr.question_id = q.id
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                WHERE 1=1
+            """
+            params = []
+            
+            if question_id:
+                sql += " AND lr.question_id = ?"
+                params.append(question_id)
+            
+            if start_date:
+                sql += " AND lr.attempt_date >= ?"
+                params.append(start_date)
+            
+            if end_date:
+                sql += " AND lr.attempt_date <= ?"
+                params.append(end_date)
+            
+            sql += " ORDER BY lr.attempt_date DESC"
+            
+            if limit:
+                sql += " LIMIT ?"
+                params.append(limit)
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def _update_statistics(self, conn: sqlite3.Connection, question_id: int,
+                          is_correct: bool, response_time: int = None):
+        """統計情報を更新"""
+        # 問題の情報を取得
+        cursor = conn.execute("""
+            SELECT q.category, q.exam_category_id
+            FROM questions q
+            WHERE q.id = ?
+        """, (question_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            return
+        
+        category = row['category']
+        exam_category_id = row['exam_category_id']
+        
+        # 統計レコードを取得または作成
+        cursor = conn.execute("""
+            SELECT id, total_questions, correct_answers, incorrect_answers, average_response_time
+            FROM study_statistics
+            WHERE exam_category_id = ? AND category = ?
+        """, (exam_category_id, category))
+        
+        stat_row = cursor.fetchone()
+        
+        if stat_row:
+            # 既存の統計を更新
+            stats_id = stat_row['id']
+            total_questions = stat_row['total_questions'] + 1
+            correct_answers = stat_row['correct_answers'] + (1 if is_correct else 0)
+            incorrect_answers = stat_row['incorrect_answers'] + (0 if is_correct else 1)
+            
+            # 平均応答時間を計算
+            if response_time and stat_row['average_response_time']:
+                avg_time = (stat_row['average_response_time'] * stat_row['total_questions'] + response_time) / total_questions
+            else:
+                avg_time = response_time or stat_row['average_response_time']
+            
+            conn.execute("""
+                UPDATE study_statistics
+                SET total_questions = ?, correct_answers = ?, incorrect_answers = ?,
+                    average_response_time = ?, last_study_date = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (total_questions, correct_answers, incorrect_answers, avg_time, stats_id))
+        else:
+            # 新しい統計レコードを作成
+            conn.execute("""
+                INSERT INTO study_statistics (
+                    exam_category_id, category, total_questions, correct_answers,
+                    incorrect_answers, average_response_time, last_study_date
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (exam_category_id, category, 1, 1 if is_correct else 0,
+                  0 if is_correct else 1, response_time))
+        
+        conn.commit()
+    
+    # 学習セッション管理
+    def create_study_session(self, session_name: str, exam_type: str,
+                           study_mode: str, total_questions: int) -> int:
+        """学習セッションを作成"""
+        with self.get_connection() as conn:
+            exam_category_id = self._get_exam_category_id(conn, exam_type)
+            
+            cursor = conn.execute("""
+                INSERT INTO study_sessions (
+                    session_name, exam_category_id, study_mode, total_questions,
+                    start_time
+                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (session_name, exam_category_id, study_mode, total_questions))
+            
+            session_id = cursor.lastrowid
+            conn.commit()
+            
+            return session_id
+    
+    def end_study_session(self, session_id: int, correct_answers: int):
+        """学習セッションを終了"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE study_sessions
+                SET end_time = CURRENT_TIMESTAMP,
+                    correct_answers = ?,
+                    duration = (strftime('%s', CURRENT_TIMESTAMP) - strftime('%s', start_time))
+                WHERE id = ?
+            """, (correct_answers, session_id))
+            
+            conn.commit()
+    
+    # 統計・分析関連
+    def get_statistics(self, exam_type: str = None) -> Dict:
+        """統計情報を取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT 
+                    ec.name as exam_name,
+                    ss.category,
+                    ss.total_questions,
+                    ss.correct_answers,
+                    ss.incorrect_answers,
+                    ss.average_response_time,
+                    ss.last_study_date,
+                    CASE 
+                        WHEN ss.total_questions > 0 
+                        THEN ROUND(ss.correct_answers * 100.0 / ss.total_questions, 1)
+                        ELSE 0
+                    END as correct_rate
+                FROM study_statistics ss
+                JOIN exam_categories ec ON ss.exam_category_id = ec.id
+            """
+            params = []
+            
+            if exam_type:
+                sql += " WHERE ec.code = ?"
+                params.append(exam_type)
+            
+            sql += " ORDER BY ec.name, ss.category"
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_weak_areas(self, exam_type: str = None, limit: int = 5) -> List[Dict]:
+        """弱点分野を取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT 
+                    ec.name as exam_name,
+                    ss.category,
+                    ss.total_questions,
+                    ss.correct_answers,
+                    ss.incorrect_answers,
+                    ROUND(ss.correct_answers * 100.0 / ss.total_questions, 1) as correct_rate
+                FROM study_statistics ss
+                JOIN exam_categories ec ON ss.exam_category_id = ec.id
+                WHERE ss.total_questions >= 3
+            """
+            params = []
+            
+            if exam_type:
+                sql += " AND ec.code = ?"
+                params.append(exam_type)
+            
+            sql += " ORDER BY correct_rate ASC, ss.total_questions DESC"
+            
+            if limit:
+                sql += " LIMIT ?"
+                params.append(limit)
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_progress_over_time(self, exam_type: str = None, days: int = 30) -> List[Dict]:
+        """時系列での進捗を取得"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT 
+                    DATE(lr.attempt_date) as study_date,
+                    COUNT(*) as total_questions,
+                    SUM(lr.is_correct) as correct_answers,
+                    ROUND(SUM(lr.is_correct) * 100.0 / COUNT(*), 1) as correct_rate
+                FROM learning_records lr
+                JOIN questions q ON lr.question_id = q.id
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                WHERE lr.attempt_date >= datetime('now', '-{} days')
+            """.format(days)
+            params = []
+            
+            if exam_type:
+                sql += " AND ec.code = ?"
+                params.append(exam_type)
+            
+            sql += " GROUP BY DATE(lr.attempt_date) ORDER BY study_date"
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    # ユーティリティメソッド
+    def _get_exam_category_id(self, conn: sqlite3.Connection, exam_code: str) -> int:
+        """試験区分IDを取得"""
+        cursor = conn.execute(
+            "SELECT id FROM exam_categories WHERE code = ?", (exam_code,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise DataError(f"試験区分が見つかりません: {exam_code}")
+        return row['id']
+    
+    def backup_database(self, backup_path: Path = None) -> Path:
+        """データベースをバックアップ"""
+        if backup_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.db_path.parent / f"backup_{timestamp}.db"
+        
+        import shutil
+        shutil.copy2(self.db_path, backup_path)
+        
+        self.logger.info(f"データベースをバックアップ: {backup_path}")
+        return backup_path
+    
+    def restore_database(self, backup_path: Path):
+        """データベースを復元"""
+        if not backup_path.exists():
+            raise DataError(f"バックアップファイルが見つかりません: {backup_path}")
+        
+        import shutil
+        shutil.copy2(backup_path, self.db_path)
+        
+        self.logger.info(f"データベースを復元: {backup_path}")
+    
+    def get_database_info(self) -> Dict:
+        """データベース情報を取得"""
+        with self.get_connection() as conn:
+            info = {}
+            
+            # 各テーブルの件数
+            tables = ['exam_categories', 'questions', 'learning_records', 'study_sessions']
+            for table in tables:
+                cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
+                info[f"{table}_count"] = cursor.fetchone()['count']
+            
+            # ファイルサイズ
+            info['file_size'] = self.db_path.stat().st_size
+            
+            # 最終更新日時
+            info['last_modified'] = datetime.fromtimestamp(self.db_path.stat().st_mtime)
+            
+            return info
+    
+    def vacuum_database(self):
+        """データベースを最適化"""
+        with self.get_connection() as conn:
+            conn.execute("VACUUM")
+            conn.commit()
+        
+        self.logger.info("データベースを最適化しました")
+    
+    def cleanup_old_records(self, days: int = 90):
+        """古いレコードを削除"""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        with self.get_connection() as conn:
+            # 古い学習記録を削除
+            cursor = conn.execute("""
+                DELETE FROM learning_records 
+                WHERE attempt_date < ?
+            """, (cutoff_date,))
+            
+            deleted_count = cursor.rowcount
+            conn.commit()
+            
+            self.logger.info(f"古いレコードを削除: {deleted_count} 件")
+            
+            return deleted_count

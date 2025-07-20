@@ -1,0 +1,352 @@
+{% extends "web/base.html" %}
+
+{% block title %}学習進捗 - 情報技術者試験学習システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">
+                <i class="fas fa-chart-line"></i> 学習進捗
+            </h1>
+            <p class="lead text-muted">あなたの学習状況を詳しく分析します</p>
+        </div>
+    </div>
+</div>
+
+<!-- 全体統計 -->
+<div class="row mb-5">
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); color: #0277bd; border: 1px solid #b3e5fc; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ progress_data.overall_statistics.total_questions }}</div>
+                <div class="stat-label">総問題数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); color: #2e7d32; border: 1px solid #c8e6c9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ progress_data.overall_statistics.total_correct }}</div>
+                <div class="stat-label">正解数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); color: #7b1fa2; border: 1px solid #e1bee7; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ (progress_data.overall_statistics.overall_correct_rate * 100)|round(1) }}</div>
+                <div class="stat-label">正答率 (%)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%); color: #f57c00; border: 1px solid #ffcc80; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+            <div class="card-body">
+                <div class="stat-value">{{ detailed_analysis.basic_stats.study_days }}</div>
+                <div class="stat-label">学習日数</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 分野別パフォーマンス -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> 分野別パフォーマンス</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for stat in progress_data.category_statistics %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card" style="border: 2px solid {% if stat.correct_rate >= 80 %}#c8e6c9{% elif stat.correct_rate >= 60 %}#b3e5fc{% else %}#ffcc80{% endif %}; border-radius: 15px; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06); background: {% if stat.correct_rate >= 80 %}linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%){% elif stat.correct_rate >= 60 %}linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%){% else %}linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%){% endif %};">
+                            <div class="card-body text-center">
+                                <h6 class="card-title fw-bold" style="color: {% if stat.correct_rate >= 80 %}#2e7d32{% elif stat.correct_rate >= 60 %}#0277bd{% else %}#f57c00{% endif %}">{{ stat.category }}</h6>
+                                <div class="display-6 fw-bold mb-3" style="color: {% if stat.correct_rate >= 80 %}#2e7d32{% elif stat.correct_rate >= 60 %}#0277bd{% else %}#f57c00{% endif %}">
+                                    {{ stat.correct_rate }}%
+                                </div>
+                                <div class="progress mb-3" style="height: 8px; border-radius: 10px; background-color: #f5f5f5;">
+                                    <div class="progress-bar" 
+                                         role="progressbar" 
+                                         style="width: {{ stat.correct_rate }}%; background: {% if stat.correct_rate >= 80 %}linear-gradient(90deg, #66bb6a, #4caf50){% elif stat.correct_rate >= 60 %}linear-gradient(90deg, #42a5f5, #2196f3){% else %}linear-gradient(90deg, #ffa726, #ff9800){% endif %}; border-radius: 10px;"
+                                         aria-valuenow="{{ stat.correct_rate }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ stat.total_questions }} 問学習済み</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 弱点分野 -->
+{% if progress_data.weak_areas %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> 弱点分野</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for area in progress_data.weak_areas %}
+                    <div class="col-md-6 mb-3">
+                        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ area.category }}</strong><br>
+                                <small>{{ area.total_questions }} 問学習済み</small>
+                            </div>
+                            <div class="text-end">
+                                <div class="h5 mb-0">{{ area.correct_rate }}%</div>
+                                <small class="text-muted">正答率</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-center">
+                    <a href="{{ url_for('study') }}?mode=weak_area" class="btn btn-warning">
+                        <i class="fas fa-target"></i> 弱点克服モードで学習
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 成長傾向 -->
+<div class="row mb-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-trending-up"></i> 成長傾向</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    {% set trend = detailed_analysis.growth_trend.trend %}
+                    {% if trend == 'improving' %}
+                        <i class="fas fa-arrow-up fa-3x text-success mb-3"></i>
+                        <h4 class="text-success">📈 向上中</h4>
+                        <p class="text-muted">学習成果が着実に向上しています！</p>
+                    {% elif trend == 'stable' %}
+                        <i class="fas fa-minus fa-3x text-info mb-3"></i>
+                        <h4 class="text-info">📊 安定</h4>
+                        <p class="text-muted">一定の成績を維持しています。</p>
+                    {% elif trend == 'declining' %}
+                        <i class="fas fa-arrow-down fa-3x text-danger mb-3"></i>
+                        <h4 class="text-danger">📉 要注意</h4>
+                        <p class="text-muted">学習方法を見直しましょう。</p>
+                    {% else %}
+                        <i class="fas fa-question fa-3x text-secondary mb-3"></i>
+                        <h4 class="text-secondary">📄 データ不足</h4>
+                        <p class="text-muted">もう少し学習を続けてください。</p>
+                    {% endif %}
+                </div>
+                
+                {% if detailed_analysis.growth_trend.weekly_rates %}
+                <div class="mt-4">
+                    <h6>週別正答率推移</h6>
+                    <div style="height: 200px; position: relative;">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-crystal-ball"></i> 合格予測</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    {% set prediction = detailed_analysis.performance_prediction.prediction %}
+                    {% if prediction == 'high_pass_probability' %}
+                        <i class="fas fa-trophy fa-3x text-success mb-3"></i>
+                        <h4 class="text-success">🎯 高い合格可能性</h4>
+                        <p class="text-muted">このペースを維持すれば合格は間違いなし！</p>
+                    {% elif prediction == 'improving_trend' %}
+                        <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                        <h4 class="text-info">📈 向上中</h4>
+                        <p class="text-muted">着実に実力をつけています。</p>
+                    {% else %}
+                        <i class="fas fa-dumbbell fa-3x text-warning mb-3"></i>
+                        <h4 class="text-warning">📚 要強化</h4>
+                        <p class="text-muted">継続的な学習が必要です。</p>
+                    {% endif %}
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border rounded p-3">
+                            <div class="h5 text-primary">{{ (detailed_analysis.performance_prediction.recent_performance * 100)|round(1) }}%</div>
+                            <small class="text-muted">最近の成績</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-3">
+                            <div class="h5 text-info">{{ (detailed_analysis.performance_prediction.overall_performance * 100)|round(1) }}%</div>
+                            <small class="text-muted">全体成績</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近の活動 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history"></i> 最近の学習活動</h5>
+            </div>
+            <div class="card-body">
+                {% if progress_data.recent_activity %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>日時</th>
+                                    <th>分野</th>
+                                    <th>結果</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in progress_data.recent_activity %}
+                                <tr>
+                                    <td>{{ activity.attempt_date[:19] }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ activity.category or 'その他' }}</span>
+                                    </td>
+                                    <td>
+                                        {% if activity.is_correct %}
+                                            <span class="badge bg-success">✓ 正解</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">✗ 不正解</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clipboard fa-3x mb-3"></i>
+                        <p>学習活動の記録がありません。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 成長傾向グラフ
+    function createGrowthChart() {
+        const ctx = document.getElementById('growthChart');
+        if (!ctx) return;
+        
+        const weeklyRates = {{ detailed_analysis.growth_trend.weekly_rates | tojson }};
+        const labels = weeklyRates.map((_, index) => `第${index + 1}週`);
+        const data = weeklyRates.map(rate => rate * 100);
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '正答率',
+                    data: data,
+                    borderColor: '#4facfe',
+                    backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#4facfe',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#4facfe',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                },
+                elements: {
+                    point: {
+                        hoverRadius: 8
+                    }
+                }
+            }
+        });
+    }
+    
+    // ページロード時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+        createGrowthChart();
+        
+        // カードのアニメーション
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %}
