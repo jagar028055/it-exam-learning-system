@@ -29,8 +29,8 @@ from src.utils.utils import Logger, SystemError, ValidationError
 
 # Flaskアプリケーションの初期化
 app = Flask(__name__, 
-            template_folder=str(project_root / 'web' / 'templates'),
-            static_folder=str(project_root / 'web' / 'static'))
+            template_folder='templates',
+            static_folder='static')
 app.config['SECRET_KEY'] = secrets.token_hex(16)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
@@ -100,14 +100,14 @@ def index():
         # 推奨事項（デモ用）
         recommendations = _get_demo_recommendations()
         
-        return render_template('web/index.html', 
+        return render_template('index.html', 
                              stats=stats,
                              recent_activity=recent_activity,
                              recommendations=recommendations)
     except Exception as e:
         logger.error(f"トップページエラー: {e}")
         flash(f"エラーが発生しました: {e}", 'error')
-        return render_template('web/index.html', stats={})
+        return render_template('index.html', stats={})
 
 @app.route('/study')
 def study():
@@ -119,13 +119,13 @@ def study():
         # 分野情報を取得
         categories = list(config.SUBJECT_CATEGORIES.keys())
         
-        return render_template('web/study.html',
+        return render_template('study.html',
                              exam_types=exam_types,
                              categories=categories)
     except Exception as e:
         logger.error(f"学習ページエラー: {e}")
         flash(f"エラーが発生しました: {e}", 'error')
-        return render_template('web/study.html', exam_types=[], categories=[])
+        return render_template('study.html', exam_types=[], categories=[])
 
 @app.route('/start_session', methods=['POST'])
 def start_session():
@@ -210,7 +210,7 @@ def question():
         
         current_question = questions[current_idx]
         
-        return render_template('web/question.html',
+        return render_template('question.html',
                              question=current_question,
                              question_number=current_idx + 1,
                              total_questions=len(questions))
@@ -307,7 +307,7 @@ def session_result():
         session.pop('answers', None)
         session.pop('start_time', None)
         
-        return render_template('web/session_result.html',
+        return render_template('session_result.html',
                              summary=summary)
         
     except Exception as e:
@@ -337,7 +337,7 @@ def progress():
             'progress_over_time': progress_over_time
         }
         
-        return render_template('web/progress.html',
+        return render_template('progress.html',
                              progress_data=progress_data,
                              exam_type=exam_type,
                              days=days)
@@ -345,7 +345,7 @@ def progress():
     except Exception as e:
         logger.error(f"進捗ページエラー: {e}")
         flash(f"進捗表示に失敗しました: {e}", 'error')
-        return render_template('web/progress.html', progress_data={})
+        return render_template('progress.html', progress_data={})
 
 @app.route('/reports')
 def reports():
@@ -364,13 +364,13 @@ def reports():
         # 作成日時順にソート
         report_files.sort(key=lambda x: x['created'], reverse=True)
         
-        return render_template('web/reports.html',
+        return render_template('reports.html',
                              report_files=report_files)
         
     except Exception as e:
         logger.error(f"レポートページエラー: {e}")
         flash(f"レポート表示に失敗しました: {e}", 'error')
-        return render_template('web/reports.html', report_files=[])
+        return render_template('reports.html', report_files=[])
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
@@ -439,7 +439,7 @@ def settings():
             'log_level': config.LOG_LEVEL
         }
         
-        return render_template('web/settings.html',
+        return render_template('settings.html',
                              db_info=db_info,
                              perf_metrics=perf_metrics,
                              cache_stats=cache_stats,
@@ -448,7 +448,7 @@ def settings():
     except Exception as e:
         logger.error(f"設定ページエラー: {e}")
         flash(f"設定表示に失敗しました: {e}", 'error')
-        return render_template('web/settings.html', db_info={}, settings_info={})
+        return render_template('settings.html', db_info={}, settings_info={})
 
 @app.route('/fetch_data', methods=['POST'])
 def fetch_data():
@@ -672,35 +672,35 @@ def _save_questions_to_db(questions: List[Dict], exam_type: str, year: int):
 @app.errorhandler(404)
 def not_found(error):
     logger.warning(f"404エラー: {request.url}")
-    return render_template('web/error.html', 
+    return render_template('error.html', 
                          error_code=404, 
                          error_message="ページが見つかりません"), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"500エラー: {error}")
-    return render_template('web/error.html', 
+    return render_template('error.html', 
                          error_code=500, 
                          error_message="内部サーバーエラーが発生しました"), 500
 
 @app.errorhandler(400)
 def bad_request(error):
     logger.warning(f"400エラー: {error}")
-    return render_template('web/error.html',
+    return render_template('error.html',
                          error_code=400,
                          error_message="不正なリクエストです"), 400
 
 @app.errorhandler(403)
 def forbidden(error):
     logger.warning(f"403エラー: {error}")
-    return render_template('web/error.html',
+    return render_template('error.html',
                          error_code=403,
                          error_message="アクセスが拒否されました"), 403
 
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"予期しないエラー: {e}")
-    return render_template('web/error.html',
+    return render_template('error.html',
                          error_code=500,
                          error_message="予期しないエラーが発生しました"), 500
 

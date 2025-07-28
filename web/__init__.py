@@ -1,1 +1,0 @@
-# Web assets and templates
