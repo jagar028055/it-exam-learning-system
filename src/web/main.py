@@ -13,7 +13,13 @@ from typing import Dict, List, Optional
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_file
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
+from flask_talisman import Talisman
 import secrets
+import os
+from dotenv import load_dotenv
+
+# 環境変数を読み込み
+load_dotenv()
 
 # プロジェクトルートをパスに追加
 import sys
@@ -31,17 +37,46 @@ from src.utils.utils import Logger, SystemError, ValidationError
 app = Flask(__name__, 
             template_folder='templates',
             static_folder='static')
-app.config['SECRET_KEY'] = secrets.token_hex(16)
+
+# 静的ファイルキャッシュ設定（本番環境のみ）
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1年
+
+@app.after_request
+def after_request(response):
+    """レスポンスヘッダーの設定"""
+    # 静的ファイルのキャッシュ設定
+    if request.endpoint == 'static':
+        response.cache_control.max_age = 31536000  # 1年
+        response.cache_control.public = True
+    return response
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_FILE_DIR'] = str(config.PROJECT_ROOT / 'flask_session')
+app.config['SESSION_FILE_DIR'] = os.environ.get('SESSION_FILE_DIR', str(config.PROJECT_ROOT / 'flask_session'))
 
 # セッション設定
 Session(app)
 
 # CSRF保護
 csrf = CSRFProtect(app)
+
+# セキュリティヘッダー設定（本番環境のみ）
+if os.environ.get('FLASK_ENV') == 'production':
+    csp = {
+        'default-src': "'self'",
+        'script-src': "'self' 'unsafe-inline'",
+        'style-src': "'self' 'unsafe-inline'",
+        'img-src': "'self' data:",
+        'font-src': "'self'",
+        'connect-src': "'self'",
+        'frame-src': "'none'"
+    }
+    Talisman(app, 
+             force_https=True,
+             strict_transport_security=True,
+             content_security_policy=csp)
 
 # ログ設定
 logging.basicConfig(

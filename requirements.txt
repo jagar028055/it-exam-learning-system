@@ -58,3 +58,9 @@ Flask-WTF>=1.1.1
 
 # Production server
 gunicorn>=21.2.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Security
+Flask-Talisman>=1.1.0

@@ -4,12 +4,18 @@ services:
     runtime: python3
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile - --error-logfile - app:app
     envVars:
       - key: FLASK_ENV
         value: production
+      - key: SECRET_KEY
+        generateValue: true
       - key: PYTHONPATH
         value: /opt/render/project/src
       - key: DATABASE_PATH
         value: /opt/render/project/src/data/database.db
+      - key: SESSION_FILE_DIR
+        value: /opt/render/project/src/flask_session
+      - key: LOG_LEVEL
+        value: INFO
     healthCheckPath: /health

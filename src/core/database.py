@@ -5,6 +5,7 @@
 import sqlite3
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
@@ -23,7 +24,13 @@ class DatabaseManager:
         Args:
             db_path: データベースファイルパス
         """
-        self.db_path = db_path or config.DATABASE_PATH
+        # 環境変数からデータベースパスを取得
+        env_db_path = os.environ.get('DATABASE_PATH')
+        if env_db_path:
+            self.db_path = Path(env_db_path)
+        else:
+            self.db_path = db_path or config.DATABASE_PATH
+            
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         # ログ設定
@@ -55,8 +62,19 @@ class DatabaseManager:
     @contextmanager
     def get_connection(self):
         """データベース接続のコンテキストマネージャー"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=30.0,  # タイムアウト設定
+            check_same_thread=False  # 本番環境対応
+        )
         conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+        
+        # 本番環境用最適化設定
+        if os.environ.get('FLASK_ENV') == 'production':
+            conn.execute('PRAGMA journal_mode=WAL')  # WALモード
+            conn.execute('PRAGMA synchronous=NORMAL')  # 同期設定
+            conn.execute('PRAGMA cache_size=10000')  # キャッシュサイズ
+            conn.execute('PRAGMA temp_store=MEMORY')  # 一時ストレージ
         
         try:
             yield conn
