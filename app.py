@@ -17,22 +17,23 @@ load_dotenv()
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# 設定クラスをインポート
+from src.core.config import Config
+
 # 本番環境用設定
 def setup_production_environment():
     """本番環境用の設定を適用"""
     
     # 必要なディレクトリを作成
-    os.makedirs('data', exist_ok=True)
-    os.makedirs('flask_session', exist_ok=True)
-    os.makedirs('logs', exist_ok=True)
+    Config.create_directories()
     
     # ログ設定
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    log_level = os.environ.get('LOG_LEVEL', Config.LOG_LEVEL)
     logging.basicConfig(
         level=getattr(logging, log_level),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format=Config.LOG_FORMAT,
         handlers=[
-            logging.FileHandler('logs/app.log'),
+            logging.FileHandler(Config.LOG_FILE),
             logging.StreamHandler()
         ]
     )
@@ -53,8 +54,8 @@ try:
     # 本番用設定を適用
     app.config.update({
         'SECRET_KEY': os.environ.get('SECRET_KEY', 'fallback-secret-key-for-render'),
-        'SESSION_FILE_DIR': os.environ.get('SESSION_FILE_DIR', './flask_session'),
-        'DATABASE_PATH': os.environ.get('DATABASE_PATH', './data/database.db'),
+        'SESSION_FILE_DIR': os.environ.get('SESSION_FILE_DIR', str(Config.PROJECT_ROOT / 'flask_session')),
+        'DATABASE_PATH': os.environ.get('DATABASE_PATH', str(Config.DATABASE_PATH)),
     })
     
     # Flask環境の設定
