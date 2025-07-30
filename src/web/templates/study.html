@@ -26,10 +26,11 @@
                         <div class="col-md-6 mb-3">
                             <label for="exam_type" class="form-label">試験種別</label>
                             <select class="form-select" id="exam_type" name="exam_type" required>
-                                <option value="FE" selected>基本情報技術者試験</option>
-                                <option value="AP">応用情報技術者試験</option>
-                                <option value="IP">ITパスポート試験</option>
-                                <option value="SG">情報セキュリティマネジメント試験</option>
+                                {% for code, info in exam_types.items() %}
+                                <option value="{{ code }}" {{ 'selected' if code == 'FE' else '' }}>
+                                    {{ info.name if info.name else code }}
+                                </option>
+                                {% endfor %}
                             </select>
                         </div>
                         

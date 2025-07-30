@@ -212,28 +212,40 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-3 col-sm-6 mb-3">
-                                <a href="{{ url_for('study') }}" class="btn btn-primary w-100">
-                                    <i class="fas fa-redo"></i><br>
-                                    もう一度学習
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                                <a href="{{ url_for('index') }}" class="btn btn-outline-primary w-100">
+                                    <i class="fas fa-home"></i><br>
+                                    メニューに戻る
                                 </a>
                             </div>
-                            <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                                <a href="{{ url_for('study') }}" class="btn btn-primary w-100">
+                                    <i class="fas fa-redo"></i><br>
+                                    再学習
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                                 <a href="{{ url_for('study') }}?mode=weak_area" class="btn btn-warning w-100">
                                     <i class="fas fa-target"></i><br>
                                     弱点克服
                                 </a>
                             </div>
-                            <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                                 <a href="{{ url_for('progress') }}" class="btn btn-info w-100">
                                     <i class="fas fa-chart-line"></i><br>
                                     進捗確認
                                 </a>
                             </div>
-                            <div class="col-md-3 col-sm-6 mb-3">
-                                <button class="btn btn-success w-100" onclick="generateReport()">
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                                <a href="{{ url_for('reports') }}" class="btn btn-secondary w-100">
                                     <i class="fas fa-file-alt"></i><br>
-                                    レポート生成
+                                    レポート一覧
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                                <button class="btn btn-success w-100" onclick="generateReport()">
+                                    <i class="fas fa-plus"></i><br>
+                                    新規レポート
                                 </button>
                             </div>
                         </div>
@@ -340,6 +352,11 @@
     document.addEventListener('DOMContentLoaded', function() {
         createScoreChart();
         createResultChart();
+        
+        // セッション完了につき、保存されたセッション情報をクリア
+        if (typeof clearSavedSession === 'function') {
+            clearSavedSession();
+        }
         
         // カードのアニメーション
         const cards = document.querySelectorAll('.card');

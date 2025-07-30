@@ -43,6 +43,24 @@
             color: var(--primary-color) !important;
         }
         
+        .nav-link.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white !important;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .nav-link {
+            transition: all 0.3s ease;
+            margin: 0 5px;
+            border-radius: 20px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+        
         .main-content {
             background: white;
             min-height: calc(100vh - 76px);
@@ -126,6 +144,27 @@
             padding: 15px 20px;
         }
         
+        .breadcrumb {
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 15px;
+            padding: 10px 20px;
+            margin-bottom: 0;
+        }
+        
+        .breadcrumb-item a {
+            color: var(--primary-color);
+            transition: color 0.3s ease;
+        }
+        
+        .breadcrumb-item a:hover {
+            color: var(--secondary-color);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--dark-color);
+            font-weight: bold;
+        }
+        
         .footer {
             background: rgba(52, 58, 64, 0.9);
             color: white;
@@ -185,6 +224,72 @@
             .stat-value {
                 font-size: 2em;
             }
+            
+            .navbar-nav {
+                background: white;
+                border-radius: 15px;
+                padding: 10px;
+                margin-top: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }
+            
+            .nav-link {
+                padding: 12px 15px !important;
+                margin: 5px 0;
+                text-align: center;
+                font-size: 1.1em;
+            }
+            
+            .nav-link.active {
+                border-radius: 10px;
+            }
+            
+            .breadcrumb {
+                font-size: 0.9em;
+                padding: 8px 15px;
+            }
+            
+            .choice-btn {
+                font-size: 1.1em;
+                padding: 18px 20px;
+                margin-bottom: 15px;
+            }
+            
+            .btn-lg {
+                padding: 15px 30px;
+                font-size: 1.2em;
+            }
+            
+            .card {
+                margin-bottom: 20px;
+            }
+            
+            .stat-card {
+                margin-bottom: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .navbar-brand {
+                font-size: 1rem;
+            }
+            
+            .display-5 {
+                font-size: 1.8rem;
+            }
+            
+            .lead {
+                font-size: 1rem;
+            }
+            
+            .choice-btn {
+                font-size: 1rem;
+                padding: 15px 18px;
+            }
+            
+            .breadcrumb-item {
+                font-size: 0.8em;
+            }
         }
     </style>
     
@@ -205,27 +310,27 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">
                             <i class="fas fa-home"></i> ホーム
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('study') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint in ['study', 'start_session', 'question', 'answer', 'session_result'] else '' }}" href="{{ url_for('study') }}">
                             <i class="fas fa-book"></i> 学習
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('progress') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint == 'progress' else '' }}" href="{{ url_for('progress') }}">
                             <i class="fas fa-chart-line"></i> 進捗
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('reports') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint in ['reports', 'generate_report', 'view_report'] else '' }}" href="{{ url_for('reports') }}">
                             <i class="fas fa-file-alt"></i> レポート
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('settings') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint in ['settings', 'fetch_data', 'optimize_db'] else '' }}" href="{{ url_for('settings') }}">
                             <i class="fas fa-cog"></i> 設定
                         </a>
                     </li>
@@ -237,6 +342,48 @@
     <!-- Main Content -->
     <div class="main-content">
         <div class="container">
+            <!-- Breadcrumb Navigation -->
+            {% block breadcrumb %}
+            {% set breadcrumbs = [] %}
+            {% if request.endpoint == 'index' %}
+                {% set breadcrumbs = [('ホーム', url_for('index'))] %}
+            {% elif request.endpoint == 'study' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study'))] %}
+            {% elif request.endpoint == 'question' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study')), ('問題', None)] %}
+            {% elif request.endpoint == 'session_result' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study')), ('結果', None)] %}
+            {% elif request.endpoint == 'progress' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('進捗', url_for('progress'))] %}
+            {% elif request.endpoint == 'reports' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('レポート', url_for('reports'))] %}
+            {% elif request.endpoint == 'settings' %}
+                {% set breadcrumbs = [('ホーム', url_for('index')), ('設定', url_for('settings'))] %}
+            {% endif %}
+            
+            {% if breadcrumbs|length > 1 %}
+            <nav aria-label="breadcrumb" class="mb-4">
+                <ol class="breadcrumb">
+                    {% for name, url in breadcrumbs %}
+                        {% if url %}
+                            <li class="breadcrumb-item">
+                                <a href="{{ url }}" class="text-decoration-none">
+                                    <i class="fas fa-{{ 'home' if loop.first else 'chevron-right' }} me-1"></i>
+                                    {{ name }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="breadcrumb-item active" aria-current="page">
+                                <i class="fas fa-chevron-right me-1"></i>
+                                {{ name }}
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ol>
+            </nav>
+            {% endif %}
+            {% endblock %}
+            
             <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -334,7 +481,175 @@
                     showLoading();
                 });
             });
+            
+            // セッション復帰機能をチェック
+            checkForSavedSession();
+            
+            // モバイル対応の改善
+            initMobileOptimizations();
         });
+        
+        // モバイル最適化機能
+        function initMobileOptimizations() {
+            // タッチ操作の改善
+            const touchElements = document.querySelectorAll('.btn, .choice-btn, .nav-link, .card');
+            touchElements.forEach(element => {
+                // タッチフィードバックを追加
+                element.addEventListener('touchstart', function() {
+                    this.style.transform = 'scale(0.98)';
+                });
+                
+                element.addEventListener('touchend', function() {
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 150);
+                });
+            });
+            
+            // スワイプジェスチャーサポート（問題ページ用）
+            if (window.location.pathname === '/question') {
+                let startX = 0;
+                let startY = 0;
+                
+                document.addEventListener('touchstart', function(e) {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                });
+                
+                document.addEventListener('touchend', function(e) {
+                    const endX = e.changedTouches[0].clientX;
+                    const endY = e.changedTouches[0].clientY;
+                    const diffX = startX - endX;
+                    const diffY = startY - endY;
+                    
+                    // 横スワイプが縦スワイプより大きく、かつ十分な距離の場合
+                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                        if (diffX > 0) {
+                            // 左スワイプ - 次の問題（結果表示後）
+                            const nextBtn = document.getElementById('next-btn');
+                            if (nextBtn && document.getElementById('result-area').style.display !== 'none') {
+                                nextBtn.click();
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // ナビゲーションメニューの自動閉じ
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    const navbarCollapse = document.getElementById('navbarNav');
+                    if (navbarCollapse.classList.contains('show')) {
+                        const navbar = bootstrap.Collapse.getInstance(navbarCollapse);
+                        if (navbar) {
+                            navbar.hide();
+                        }
+                    }
+                });
+            });
+        }
+        
+        // セッション保存・復帰機能
+        function saveSessionToStorage(sessionData) {
+            try {
+                localStorage.setItem('itexam_session', JSON.stringify(sessionData));
+                localStorage.setItem('itexam_session_timestamp', Date.now().toString());
+            } catch (e) {
+                console.warn('セッション保存に失敗しました:', e);
+            }
+        }
+        
+        function getSavedSession() {
+            try {
+                const sessionData = localStorage.getItem('itexam_session');
+                const timestamp = localStorage.getItem('itexam_session_timestamp');
+                
+                if (sessionData && timestamp) {
+                    const sessionAge = Date.now() - parseInt(timestamp);
+                    // 24時間以内のセッションのみ有効
+                    if (sessionAge < 24 * 60 * 60 * 1000) {
+                        return JSON.parse(sessionData);
+                    }
+                }
+            } catch (e) {
+                console.warn('セッション復帰に失敗しました:', e);
+            }
+            return null;
+        }
+        
+        function clearSavedSession() {
+            try {
+                localStorage.removeItem('itexam_session');
+                localStorage.removeItem('itexam_session_timestamp');
+            } catch (e) {
+                console.warn('セッション削除に失敗しました:', e);
+            }
+        }
+        
+        function checkForSavedSession() {
+            // 学習ページ以外では復帰通知を表示しない
+            if (window.location.pathname !== '/study') {
+                return;
+            }
+            
+            const savedSession = getSavedSession();
+            if (savedSession && savedSession.current_question < savedSession.total_questions) {
+                showSessionRecoveryModal(savedSession);
+            }
+        }
+        
+        function showSessionRecoveryModal(sessionData) {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'sessionRecoveryModal';
+            modal.setAttribute('tabindex', '-1');
+            modal.innerHTML = `
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-history"></i> セッション復帰
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>前回の学習セッションが途中で中断されています。</p>
+                            <div class="alert alert-info">
+                                <strong>進捗:</strong> ${sessionData.current_question}問目 / ${sessionData.total_questions}問<br>
+                                <strong>正答率:</strong> ${Math.round((sessionData.correct_count || 0) / Math.max(sessionData.current_question - 1, 1) * 100)}%
+                            </div>
+                            <p>続きから再開しますか？</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="clearSavedSession()">
+                                新しく開始
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="resumeSession()">
+                                続きから再開
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+            
+            // モーダルが閉じられたら要素を削除
+            modal.addEventListener('hidden.bs.modal', function() {
+                document.body.removeChild(modal);
+            });
+        }
+        
+        function resumeSession() {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sessionRecoveryModal'));
+            modal.hide();
+            
+            // セッション復帰処理（実装は各ページで行う）
+            window.location.href = '/question';
+        }
     </script>
     
     {% block extra_js %}{% endblock %}

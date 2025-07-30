@@ -9,10 +9,14 @@ class Config:
     """システム設定クラス"""
     
     # プロジェクトルートディレクトリ
-    PROJECT_ROOT = Path(__file__).parent
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
     
     # データベース設定
     DATABASE_PATH = PROJECT_ROOT / "data" / "database.db"
+    
+    # ログ設定
+    LOG_FILE = PROJECT_ROOT / "logs" / "system.log"
+    LOG_LEVEL = "INFO"
     
     # データ取得設定
     IPA_BASE_URL = "https://www.ipa.go.jp/shiken/mondai-kaiotu/"
@@ -53,6 +57,11 @@ class Config:
             "name": "ITパスポート試験",
             "code": "IP",
             "description": "ITを利活用するすべての社会人・学生"
+        },
+        "SG": {
+            "name": "情報セキュリティマネジメント試験",
+            "code": "SG",
+            "description": "情報セキュリティの基本"
         }
     }
     

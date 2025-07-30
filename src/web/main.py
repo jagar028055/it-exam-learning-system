@@ -149,7 +149,7 @@ def study():
     """学習ページ"""
     try:
         # 利用可能な試験種別を取得
-        exam_types = list(config.EXAM_CATEGORIES.keys())
+        exam_types = config.EXAM_CATEGORIES
         
         # 分野情報を取得
         categories = list(config.SUBJECT_CATEGORIES.keys())
@@ -160,7 +160,7 @@ def study():
     except Exception as e:
         logger.error(f"学習ページエラー: {e}")
         flash(f"エラーが発生しました: {e}", 'error')
-        return render_template('study.html', exam_types=[], categories=[])
+        return render_template('study.html', exam_types={}, categories=[])
 
 @app.route('/start_session', methods=['POST'])
 def start_session():
@@ -321,13 +321,16 @@ def session_result():
         total_questions = len(answers)
         correct_count = sum(1 for ans in answers if ans['is_correct'])
         
+        duration = _calculate_session_duration()
+        
         summary = {
             'total_questions': total_questions,
             'correct_answers': correct_count,
             'incorrect_answers': total_questions - correct_count,
-            'correct_rate': (correct_count / total_questions * 100) if total_questions > 0 else 0,
+            'correct_rate': (correct_count / total_questions) if total_questions > 0 else 0,
             'session_name': f"学習セッション_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'duration': _calculate_session_duration()
+            'total_time': duration,
+            'average_response_time': duration / total_questions if total_questions > 0 else 0
         }
         
         # セッション終了をデータベースに記録

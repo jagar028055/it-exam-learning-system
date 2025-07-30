@@ -782,3 +782,78 @@ class DatabaseManager:
                 'indexes': indexes,
                 'table_stats': table_stats
             }
+    
+    # 学習セッション管理
+    def create_study_session(self, session_name: str, exam_type: str, study_mode: str, total_questions: int) -> int:
+        """学習セッションを作成"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO study_sessions (
+                    session_name, exam_type, study_mode, total_questions, 
+                    start_time, status
+                ) VALUES (?, ?, ?, ?, ?, 'active')
+            """, (session_name, exam_type, study_mode, total_questions, datetime.now()))
+            
+            session_id = cursor.lastrowid
+            conn.commit()
+            
+            self.logger.info(f"学習セッションを作成: {session_name} (ID: {session_id})")
+            return session_id
+    
+    def end_study_session(self, session_id: int, correct_count: int):
+        """学習セッションを終了"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE study_sessions 
+                SET end_time = ?, correct_count = ?, status = 'completed'
+                WHERE id = ?
+            """, (datetime.now(), correct_count, session_id))
+            
+            conn.commit()
+            self.logger.info(f"学習セッションを終了: ID {session_id}")
+    
+    def get_random_questions(self, exam_type: str, category: str = None, count: int = 20) -> List[Dict]:
+        """ランダムに問題を取得"""
+        with self.get_connection() as conn:
+            if category:
+                cursor = conn.execute("""
+                    SELECT id, exam_type, year, question_number, question_text, 
+                           choices, correct_answer, explanation, category, subcategory, difficulty_level
+                    FROM questions 
+                    WHERE exam_type = ? AND category = ?
+                    ORDER BY RANDOM() 
+                    LIMIT ?
+                """, (exam_type, category, count))
+            else:
+                cursor = conn.execute("""
+                    SELECT id, exam_type, year, question_number, question_text, 
+                           choices, correct_answer, explanation, category, subcategory, difficulty_level
+                    FROM questions 
+                    WHERE exam_type = ?
+                    ORDER BY RANDOM() 
+                    LIMIT ?
+                """, (exam_type, count))
+            
+            questions = []
+            for row in cursor.fetchall():
+                question = dict(row)
+                # JSONの選択肢を配列に変換
+                if question['choices']:
+                    try:
+                        question['choices'] = json.loads(question['choices'])
+                    except json.JSONDecodeError:
+                        question['choices'] = []
+                questions.append(question)
+            
+            return questions
+    
+    def record_answer(self, question_id: int, user_answer: int, is_correct: bool, study_mode: str):
+        """回答を記録"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                INSERT INTO learning_records (
+                    question_id, user_answer, is_correct, study_mode, attempt_date
+                ) VALUES (?, ?, ?, ?, ?)
+            """, (question_id, user_answer, is_correct, study_mode, datetime.now()))
+            
+            conn.commit()
