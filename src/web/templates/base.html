@@ -14,6 +14,13 @@
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     
+    <!-- Import template components -->
+    {% from 'components/navigation.html' import render_nav, render_breadcrumb %}
+    {% from 'components/forms.html' import render_form_field, render_submit_button, render_card %}
+    {% from 'components/stats.html' import render_stats_card, render_progress_bar, render_chart_placeholder, render_stats_grid, render_recent_activity %}
+    {% from 'components/alerts.html' import render_alert, render_flash_messages, render_loading_spinner, render_empty_state, render_confirmation_modal %}
+    {% from 'components/questions.html' import render_question_card, render_question_list, render_question_filters, render_pagination %}
+    
     <style>
         :root {
             --primary-color: #667eea;
@@ -296,48 +303,8 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-graduation-cap"></i> 情報技術者試験学習システム
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">
-                            <i class="fas fa-home"></i> ホーム
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint in ['study', 'start_session', 'question', 'answer', 'session_result'] else '' }}" href="{{ url_for('study') }}">
-                            <i class="fas fa-book"></i> 学習
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint == 'progress' else '' }}" href="{{ url_for('progress') }}">
-                            <i class="fas fa-chart-line"></i> 進捗
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint in ['reports', 'generate_report', 'view_report'] else '' }}" href="{{ url_for('reports') }}">
-                            <i class="fas fa-file-alt"></i> レポート
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint in ['settings', 'fetch_data', 'optimize_db'] else '' }}" href="{{ url_for('settings') }}">
-                            <i class="fas fa-cog"></i> 設定
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <!-- Navigation using component -->
+    {{ render_nav(request.endpoint.split('.')[0] if request.endpoint else '') }}
     
     <!-- Main Content -->
     <div class="main-content">
@@ -384,18 +351,8 @@
             {% endif %}
             {% endblock %}
             
-            <!-- Flash Messages -->
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                            <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }}"></i>
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+            <!-- Flash Messages using component -->
+            {{ render_flash_messages() }}
             
             <!-- Page Content -->
             {% block content %}{% endblock %}

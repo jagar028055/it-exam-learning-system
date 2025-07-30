@@ -4,7 +4,7 @@ services:
     runtime: python3
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile - --error-logfile - app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile - --error-logfile - src.web.app:app
     envVars:
       - key: FLASK_ENV
         value: production

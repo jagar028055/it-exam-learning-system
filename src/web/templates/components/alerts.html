@@ -1,0 +1,85 @@
+<!-- アラート・通知コンポーネント -->
+{% macro render_alert(message, type='info', dismissible=true, icon='') %}
+<div class="alert alert-{{ type }} {{ 'alert-dismissible' if dismissible else '' }}">
+    {% if icon %}
+        <i class="{{ icon }}"></i>
+    {% endif %}
+    
+    <div class="alert-content">
+        {{ message }}
+    </div>
+    
+    {% if dismissible %}
+        <button type="button" class="alert-close" data-dismiss="alert">
+            <i class="fas fa-times"></i>
+        </button>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_flash_messages() %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+                {% set alert_type = {
+                    'error': 'danger',
+                    'warning': 'warning', 
+                    'success': 'success',
+                    'info': 'info'
+                }.get(category, 'info') %}
+                
+                {% set alert_icon = {
+                    'error': 'fas fa-exclamation-triangle',
+                    'warning': 'fas fa-exclamation-circle',
+                    'success': 'fas fa-check-circle',
+                    'info': 'fas fa-info-circle'
+                }.get(category, 'fas fa-info-circle') %}
+                
+                {{ render_alert(message, alert_type, true, alert_icon) }}
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+{% endmacro %}
+
+{% macro render_loading_spinner(text='読み込み中...', size='medium') %}
+<div class="loading-spinner loading-spinner-{{ size }}">
+    <div class="spinner-icon">
+        <i class="fas fa-spinner fa-spin"></i>
+    </div>
+    <div class="spinner-text">{{ text }}</div>
+</div>
+{% endmacro %}
+
+{% macro render_empty_state(title, message, icon='fas fa-inbox', action_text='', action_url='') %}
+<div class="empty-state">
+    <div class="empty-icon">
+        <i class="{{ icon }}"></i>
+    </div>
+    <h3 class="empty-title">{{ title }}</h3>
+    <p class="empty-message">{{ message }}</p>
+    
+    {% if action_text and action_url %}
+        <a href="{{ action_url }}" class="btn btn-primary">{{ action_text }}</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_confirmation_modal(modal_id, title, message, confirm_text='確認', cancel_text='キャンセル') %}
+<div id="{{ modal_id }}" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h4 class="modal-title">{{ title }}</h4>
+            <button type="button" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>{{ message }}</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary modal-cancel">{{ cancel_text }}</button>
+            <button type="button" class="btn btn-danger modal-confirm">{{ confirm_text }}</button>
+        </div>
+    </div>
+</div>
+{% endmacro %}
