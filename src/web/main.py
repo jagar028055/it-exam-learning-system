@@ -121,6 +121,14 @@ def grade_class_filter(rate):
     else:
         return "danger"
 
+@app.template_filter('chr')
+def chr_filter(value):
+    """数値を文字に変換するフィルター"""
+    try:
+        return chr(int(value))
+    except (ValueError, TypeError):
+        return str(value)
+
 # ルート定義
 @app.route('/')
 def index():

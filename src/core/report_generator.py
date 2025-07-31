@@ -8,9 +8,61 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
+# Heavy dependencies with fallbacks
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+    import pandas as pd
+    HAS_PLOTLY = True
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PLOTLY = False
+    HAS_PANDAS = False
+    # Fallback classes for when plotly is not available
+    class MockFigure:
+        def to_html(self, *args, **kwargs):
+            return "<div class='chart-placeholder'>チャート機能は本番環境でのみ利用可能です</div>"
+        
+        def update_layout(self, *args, **kwargs):
+            pass
+        
+        def update_yaxes(self, *args, **kwargs):
+            pass
+            
+        def update_xaxes(self, *args, **kwargs):
+            pass
+            
+        def add_trace(self, *args, **kwargs):
+            pass
+            
+        def add_hline(self, *args, **kwargs):
+            pass
+    
+    class MockGo:
+        Figure = MockFigure
+        Scatter = type('Scatter', (), {})
+        Bar = type('Bar', (), {})
+        Pie = type('Pie', (), {})
+    
+    class MockPx:
+        def bar(self, *args, **kwargs):
+            return MockFigure()
+        def scatter(self, *args, **kwargs):
+            return MockFigure()
+        def pie(self, *args, **kwargs):
+            return MockFigure()
+    
+    def make_subplots(*args, **kwargs):
+        return MockFigure()
+    
+    class pd:
+        @staticmethod
+        def DataFrame(*args, **kwargs):
+            return []
+    
+    go = MockGo()
+    px = MockPx()
 from jinja2 import Environment, FileSystemLoader
 
 from .config import config
@@ -29,7 +81,7 @@ class ChartGenerator:
             config.LOG_LEVEL
         )
     
-    def create_progress_chart(self, progress_data: List[Dict]) -> go.Figure:
+    def create_progress_chart(self, progress_data: List[Dict]) -> Any:
         """進捗チャートを作成"""
         if not progress_data:
             return self._create_empty_chart("進捗データがありません")
@@ -87,7 +139,7 @@ class ChartGenerator:
         
         return fig
     
-    def create_category_performance_chart(self, category_stats: List[Dict]) -> go.Figure:
+    def create_category_performance_chart(self, category_stats: List[Dict]) -> Any:
         """分野別パフォーマンスチャートを作成"""
         if not category_stats:
             return self._create_empty_chart("分野別データがありません")
@@ -142,7 +194,7 @@ class ChartGenerator:
         
         return fig
     
-    def create_weak_areas_chart(self, weak_areas: List[Dict]) -> go.Figure:
+    def create_weak_areas_chart(self, weak_areas: List[Dict]) -> Any:
         """弱点分野チャートを作成"""
         if not weak_areas:
             return self._create_empty_chart("弱点分野がありません（素晴らしい！）")
@@ -186,7 +238,7 @@ class ChartGenerator:
         
         return fig
     
-    def create_study_pattern_chart(self, learning_patterns: Dict) -> go.Figure:
+    def create_study_pattern_chart(self, learning_patterns: Dict) -> Any:
         """学習パターンチャートを作成"""
         if not learning_patterns.get('hourly_performance'):
             return self._create_empty_chart("学習パターンデータがありません")
@@ -240,7 +292,7 @@ class ChartGenerator:
         
         return fig
     
-    def create_difficulty_distribution_chart(self, difficulty_stats: Dict) -> go.Figure:
+    def create_difficulty_distribution_chart(self, difficulty_stats: Dict) -> Any:
         """難易度分布チャートを作成"""
         if not difficulty_stats:
             return self._create_empty_chart("難易度データがありません")
@@ -299,7 +351,7 @@ class ChartGenerator:
         
         return fig
     
-    def create_achievement_chart(self, achievements: List[str]) -> go.Figure:
+    def create_achievement_chart(self, achievements: List[str]) -> Any:
         """達成状況チャートを作成"""
         if not achievements:
             return self._create_empty_chart("まだ達成項目がありません")
@@ -351,7 +403,7 @@ class ChartGenerator:
         
         return fig
     
-    def _create_empty_chart(self, message: str) -> go.Figure:
+    def _create_empty_chart(self, message: str) -> Any:
         """空のチャートを作成"""
         fig = go.Figure()
         
