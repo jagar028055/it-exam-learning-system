@@ -64,6 +64,11 @@ def health_check():
             'timestamp': datetime.now().isoformat()
         }, 500
 
+@main_bp.route('/healthz')
+def healthz():
+    """ヘルスチェックエンドポイント (/healthz エイリアス)"""
+    return health_check()
+
 @main_bp.route('/ping')
 def ping():
     """UptimeRobot用軽量ピングエンドポイント"""

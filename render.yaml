@@ -5,6 +5,9 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile - --error-logfile - src.web.app:app
+    autoDeploy: true
+    numReplicas: 1
+    numDeploysToRetain: 2
     envVars:
       - key: FLASK_ENV
         value: production

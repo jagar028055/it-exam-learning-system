@@ -1,0 +1,139 @@
+name: Auto Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' || contains(github.event.pull_request.title, '🤖 Claude Auto Fix')
+    
+    steps:
+    - name: Check if PR is ready for merge
+      id: check
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number
+          });
+          
+          // PRの状態をチェック
+          const checks = await github.rest.checks.listForRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: pr.head.sha
+          });
+          
+          const allChecksPassed = checks.data.check_runs.every(check => 
+            check.status === 'completed' && check.conclusion === 'success'
+          );
+          
+          // CIの状態をチェック
+          const statuses = await github.rest.repos.listCommitStatusesForRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: pr.head.sha
+          });
+          
+          const allStatusesPassed = statuses.data.length === 0 || 
+            statuses.data.every(status => status.state === 'success');
+          
+          const canMerge = pr.mergeable && !pr.draft && allChecksPassed && allStatusesPassed;
+          
+          console.log(`PR状態: mergeable=${pr.mergeable}, draft=${pr.draft}`);
+          console.log(`チェック状態: ${allChecksPassed}, ステータス状態: ${allStatusesPassed}`);
+          console.log(`マージ可能: ${canMerge}`);
+          
+          return canMerge;
+    
+    - name: Auto merge PR
+      if: steps.check.outputs.result == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.pulls.merge({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+            merge_method: 'merge',
+            commit_title: `Auto-merge: ${context.payload.pull_request.title}`,
+            commit_message: `Automatically merged by GitHub Actions\n\n${context.payload.pull_request.body || ''}`
+          });
+          
+          console.log('PRが自動的にマージされました！');
+          
+    - name: Post merge notification
+      if: steps.check.outputs.result == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: `🎉 **自動マージ完了**\n\n✅ 全てのチェックが通過したため、PRを自動的にマージしました。\n🚀 Renderへのデプロイが開始されます。\n\n📊 次の手順:\n- [ ] デプロイ完了の確認\n- [ ] ヘルスチェックの確認\n- [ ] エラーログの監視`
+          });
+
+  post-merge-verification:
+    needs: auto-merge
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Wait for deployment
+      run: |
+        echo "デプロイ完了を待機中..."
+        sleep 60
+        
+    - name: Verify deployment
+      run: |
+        echo "デプロイ検証中..."
+        
+        # ヘルスチェック
+        if curl -f -s https://itexam-study-system.onrender.com/healthz; then
+          echo "✅ ヘルスチェック成功"
+        else
+          echo "❌ ヘルスチェック失敗"
+          exit 1
+        fi
+        
+        # 基本的な機能テスト
+        if curl -f -s https://itexam-study-system.onrender.com/ > /dev/null; then
+          echo "✅ トップページアクセス成功"
+        else
+          echo "❌ トップページアクセス失敗"
+          exit 1
+        fi
+        
+    - name: Create success notification
+      if: success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // 最新のコミットからPR番号を取得
+          const commit = context.payload.head_commit;
+          const prMatch = commit.message.match(/#(\d+)/);
+          
+          if (prMatch) {
+            const prNumber = prMatch[1];
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🚀 **デプロイ検証完了**\n\n✅ 自動マージ後のデプロイが正常に完了しました！\n\n🔗 **確認リンク:**\n- [アプリケーション](https://itexam-study-system.onrender.com)\n- [ヘルスチェック](https://itexam-study-system.onrender.com/healthz)\n\n📊 **検証結果:**\n- [x] ヘルスチェック成功\n- [x] トップページアクセス成功\n- [x] デプロイ完了\n\n✨ システムは正常稼働中です！`
+            });
+          }
+          
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "🚨 デプロイ検証失敗 - ロールバックを検討してください"
+        echo "Render ダッシュボードで前のデプロイに戻すか、"
+        echo "git revert で変更を取り消してください"

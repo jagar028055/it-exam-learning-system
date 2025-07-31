@@ -1,0 +1,313 @@
+name: Daily System Report
+
+on:
+  schedule:
+    # 毎日午前6時 (JST午後3時) にレポート生成
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      report_type:
+        description: 'レポートタイプ'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+        - daily
+        - weekly
+        - monthly
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pandas matplotlib seaborn
+        npm install -g @render-cli/cli
+        
+    - name: Generate system report
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        cat > generate_report.py << 'EOF'
+        import json
+        import requests
+        import subprocess
+        from datetime import datetime, timedelta
+        import os
+        import re
+        
+        def fetch_render_logs():
+            """Renderからログを取得"""
+            try:
+                result = subprocess.run(
+                    ['render', 'logs', '--service', os.environ['RENDER_SERVICE_ID'], '--tail', '1000'],
+                    capture_output=True, text=True, timeout=60
+                )
+                return result.stdout
+            except Exception as e:
+                return f"ログ取得エラー: {e}"
+        
+        def analyze_logs(logs):
+            """ログを解析して統計を作成"""
+            stats = {
+                'total_requests': 0,
+                'error_500': 0,
+                'error_4xx': 0,
+                'error_total': 0,
+                'response_times': [],
+                'popular_endpoints': {},
+                'error_messages': []
+            }
+            
+            lines = logs.split('\n')
+            for line in lines:
+                # HTTPリクエストの検出
+                if any(method in line for method in ['GET ', 'POST ', 'PUT ', 'DELETE ']):
+                    stats['total_requests'] += 1
+                    
+                    # エンドポイントを抽出
+                    endpoint_match = re.search(r'(GET|POST|PUT|DELETE)\s+([^\s]+)', line)
+                    if endpoint_match:
+                        endpoint = endpoint_match.group(2)
+                        stats['popular_endpoints'][endpoint] = stats['popular_endpoints'].get(endpoint, 0) + 1
+                
+                # エラーステータスの検出
+                if ' 500 ' in line:
+                    stats['error_500'] += 1
+                elif re.search(r' 4[0-9][0-9] ', line):
+                    stats['error_4xx'] += 1
+                
+                # エラーメッセージの検出
+                if 'ERROR' in line or 'Exception' in line:
+                    stats['error_total'] += 1
+                    if len(stats['error_messages']) < 5:  # 最大5件まで保存
+                        stats['error_messages'].append(line.strip())
+            
+            return stats
+        
+        def check_service_health():
+            """サービスのヘルスチェック"""
+            try:
+                response = requests.get('https://itexam-study-system.onrender.com/healthz', timeout=10)
+                return {
+                    'status': 'healthy' if response.status_code == 200 else 'unhealthy',
+                    'response_time': response.elapsed.total_seconds(),
+                    'status_code': response.status_code
+                }
+            except Exception as e:
+                return {
+                    'status': 'error',
+                    'error': str(e),
+                    'response_time': None,
+                    'status_code': None
+                }
+        
+        def generate_recommendations(stats, health):
+            """改善提案を生成"""
+            recommendations = []
+            
+            if stats['error_500'] > 0:
+                recommendations.append(f"🚨 {stats['error_500']}件の500エラーが検出されました。原因調査が必要です。")
+            
+            if stats['error_4xx'] > 10:
+                recommendations.append(f"⚠️ {stats['error_4xx']}件の4xxエラーが検出されました。URL設計の見直しを検討してください。")
+            
+            if health['response_time'] and health['response_time'] > 2.0:
+                recommendations.append(f"🐌 レスポンス時間が{health['response_time']:.2f}秒です。パフォーマンス改善を検討してください。")
+            
+            if health['status'] != 'healthy':
+                recommendations.append("❌ ヘルスチェックが失敗しています。システム状態を確認してください。")
+            
+            if not recommendations:
+                recommendations.append("✅ システムは正常に稼働しています。")
+            
+            return recommendations
+        
+        def main():
+            print("📊 日次システムレポートを生成中...")
+            
+            # ログを取得・解析
+            logs = fetch_render_logs()
+            stats = analyze_logs(logs)
+            
+            # ヘルスチェック
+            health = check_service_health()
+            
+            # 推奨事項生成
+            recommendations = generate_recommendations(stats, health)
+            
+            # レポート生成
+            report_date = datetime.now().strftime('%Y-%m-%d')
+            report = f"""# 📊 日次システムレポート - {report_date}
+        
+        ## システム状態
+        - **ステータス**: {health['status']}
+        - **レスポンス時間**: {health['response_time']:.2f}秒 (ヘルスチェック)
+        - **ステータスコード**: {health['status_code']}
+        
+        ## アクセス統計 (過去24時間)
+        - **総リクエスト数**: {stats['total_requests']:,}件
+        - **500エラー**: {stats['error_500']}件
+        - **4xxエラー**: {stats['error_4xx']}件
+        - **エラーログ**: {stats['error_total']}件
+        
+        ## 人気エンドポイント (Top 5)
+        """
+            
+            # 人気エンドポイントを追加
+            sorted_endpoints = sorted(stats['popular_endpoints'].items(), key=lambda x: x[1], reverse=True)[:5]
+            for i, (endpoint, count) in enumerate(sorted_endpoints, 1):
+                report += f"{i}. `{endpoint}` - {count}回\n"
+            
+            if stats['error_messages']:
+                report += "\n## 最新エラーメッセージ\n```\n"
+                for error in stats['error_messages']:
+                    report += f"{error}\n"
+                report += "```\n"
+            
+            report += "\n## 推奨事項\n"
+            for rec in recommendations:
+                report += f"- {rec}\n"
+            
+            report += f"""
+        ## メトリクス詳細
+        - **レポート生成時刻**: {datetime.now().isoformat()}
+        - **監視期間**: 過去24時間
+        - **データソース**: Render logs, ヘルスチェックAPI
+        
+        ---
+        🤖 Generated by GitHub Actions
+        """
+            
+            # ファイルに保存
+            with open('daily_report.md', 'w', encoding='utf-8') as f:
+                f.write(report)
+            
+            print("✅ レポート生成完了")
+            
+            # サマリーをGitHub環境変数に設定
+            os.environ['REPORT_STATUS'] = health['status']
+            os.environ['ERROR_500_COUNT'] = str(stats['error_500'])
+            os.environ['TOTAL_REQUESTS'] = str(stats['total_requests'])
+            
+            # GitHub Actionsの出力に設定
+            with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                env_file.write(f"REPORT_STATUS={health['status']}\n")
+                env_file.write(f"ERROR_500_COUNT={stats['error_500']}\n")
+                env_file.write(f"TOTAL_REQUESTS={stats['total_requests']}\n")
+        
+        if __name__ == '__main__':
+            main()
+        EOF
+        
+        python generate_report.py
+        
+    - name: Upload report as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-report-${{ github.run_id }}
+        path: daily_report.md
+        
+    - name: Post report to GitHub Issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('daily_report.md', 'utf8');
+          
+          const today = new Date().toISOString().split('T')[0];
+          const title = `📊 日次システムレポート - ${today}`;
+          
+          // 既存の日次レポートIssueがあるか確認
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'daily-report'
+          });
+          
+          // 今日の日付を含むIssueがあるか確認
+          const todayIssue = issues.data.find(issue => 
+            issue.title.includes(today)
+          );
+          
+          if (todayIssue) {
+            // 既存のIssueを更新
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: todayIssue.number,
+              body: report
+            });
+            console.log(`既存のIssue #${todayIssue.number} を更新しました`);
+          } else {
+            // 新しいIssueを作成
+            const newIssue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: report,
+              labels: ['daily-report', 'system-monitoring']
+            });
+            console.log(`新しいIssue #${newIssue.data.number} を作成しました`);
+            
+            // 1週間前のレポートがあれば自動クローズ
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            const weekAgoStr = weekAgo.toISOString().split('T')[0];
+            
+            const oldIssues = issues.data.filter(issue => 
+              issue.title.includes(weekAgoStr)
+            );
+            
+            for (const oldIssue of oldIssues) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: oldIssue.number,
+                state: 'closed'
+              });
+              console.log(`古いレポート #${oldIssue.number} をクローズしました`);
+            }
+          }
+          
+    - name: Alert on critical issues
+      if: env.ERROR_500_COUNT > 0 || env.REPORT_STATUS != 'healthy'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `🚨 システムアラート - ${new Date().toISOString().split('T')[0]}`;
+          const body = `## 🚨 システムに問題が検出されました
+          
+          **システムステータス**: ${process.env.REPORT_STATUS}
+          **500エラー数**: ${process.env.ERROR_500_COUNT}件
+          **総リクエスト数**: ${process.env.TOTAL_REQUESTS}件
+          
+          ## 緊急対応が必要です
+          - [ ] システム状態の詳細確認
+          - [ ] エラーログの調査
+          - [ ] 必要に応じて緊急修正
+          
+          ## 関連リンク
+          - [詳細レポート](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          - [ヘルスチェック](https://itexam-study-system.onrender.com/healthz)
+          - [Renderダッシュボード](https://dashboard.render.com)
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['critical', 'system-alert', 'urgent']
+          });

@@ -1,0 +1,84 @@
+name: Health Monitor & Keep Alive
+
+on:
+  schedule:
+    # 15分間隔でヘルスチェック実行
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Keep service alive
+      run: |
+        echo "Pinging service to keep it alive..."
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://itexam-study-system.onrender.com/healthz)
+        echo "Health check response: $response"
+        
+        if [ "$response" = "200" ]; then
+          echo "✅ Service is healthy"
+        else
+          echo "❌ Service returned $response"
+          exit 1
+        fi
+        
+    - name: Create issue on failure
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `🚨 ヘルスチェック失敗 - ${new Date().toISOString()}`;
+          const body = `## ヘルスチェックが失敗しました
+          
+          **時刻**: ${new Date().toISOString()}
+          **URL**: https://itexam-study-system.onrender.com/healthz
+          **ワークフロー**: ${context.workflow}
+          **実行ID**: ${context.runId}
+          
+          ### 次のアクションが必要です:
+          - [ ] サービスの状態を確認
+          - [ ] ログを確認
+          - [ ] 必要に応じて再デプロイ
+          
+          ### 関連リンク
+          - [Render ダッシュボード](https://dashboard.render.com)
+          - [ワークフロー実行](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          `;
+          
+          // 既存の未解決ヘルスチェックIssueがあるか確認
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'health-check-failure'
+          });
+          
+          if (issues.data.length === 0) {
+            // 新しいIssueを作成
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['health-check-failure', 'urgent']
+            });
+          } else {
+            // 既存のIssueにコメント追加
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issues.data[0].number,
+              body: `## 追加のヘルスチェック失敗\n\n**時刻**: ${new Date().toISOString()}\n**実行ID**: ${context.runId}`
+            });
+          }
+
+  log-monitor:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check for 500 errors
+      run: |
+        echo "Log monitoring placeholder - requires Render CLI setup"
+        # Note: Render CLI でログを取得してエラーをチェックする処理
+        # これは後でRender CLIセットアップ後に実装
+        echo "TODO: Implement log monitoring with Render CLI"
