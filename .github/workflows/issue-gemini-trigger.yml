@@ -1,0 +1,28 @@
+# ファイル名: .github/workflows/issue-gemini-trigger.yml
+
+name: Issueが作成されたらGeminiで整理する
+
+on:
+  issues:
+    types: [opened, reopened] # Issueが「作成された」または「再オープンされた」ときに、このワークフローを動かす
+
+jobs:
+  call_issue_triage_tool: # このジョブの名前は何でもOK
+    runs-on: ubuntu-latest # GitHubが提供する仮想環境で動かす
+    steps:
+      - name: GeminiのIssue整理ツールを呼び出す
+        # ここをあなたのGitHubユーザー名/組織名と、github-actions-reusableリポジトリの正確なパスに置き換えてください。
+        # 例: uses: your-github-username/github-actions-reusable/.github/workflows/reusable/issue-triage.yml@main
+        uses: jagar028055/github-actions-reusable/.github/workflows/reusable/issue-triage.yml@main
+
+        with:
+          # 呼び出した道具に渡す情報（Issueのタイトルと本文を渡す例）
+          prompt: "このIssueを整理してください: ${{ github.event.issue.title }}
+
+詳細: ${{ github.event.issue.body }}"
+
+        secrets:
+          # Geminiを使うためのAPIキーを、GitHubに安全に渡す
+          # この「GEMINI_API_KEY」は、GitHubリポジトリのSettings -> Secrets -> Actions で設定する必要があります。
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+
