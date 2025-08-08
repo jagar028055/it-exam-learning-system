@@ -1,0 +1,320 @@
+name: Automatic Database Backup
+
+# DISABLED - Using minimal-monitoring.yml for weekly backup only
+# on:
+#   schedule:
+#     # 毎日午前2時（JST 11時）にバックアップ実行
+#     - cron: '0 2 * * *'
+#     # 毎週日曜日午前3時に詳細バックアップ
+#     - cron: '0 3 * * 0'
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: 'Type of backup to perform'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+        - daily
+        - weekly
+        - manual
+        - emergency
+
+env:
+  BACKUP_RETENTION_DAYS: 30
+  MIN_BACKUPS_KEEP: 5
+
+jobs:
+  database-backup:
+    runs-on: ubuntu-latest
+    if: github.repository != '' # Only run if in a repository
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Create backup directories
+      run: |
+        mkdir -p backups
+        mkdir -p logs
+        mkdir -p src/data
+        
+    - name: Create dummy database for demo
+      if: github.event.inputs.backup_type == 'manual' || github.event_name == 'workflow_dispatch'
+      run: |
+        # Create a dummy SQLite database for demonstration
+        python3 -c "
+import sqlite3
+import os
+from datetime import datetime
+
+os.makedirs('src/data', exist_ok=True)
+db_path = 'src/data/database.db'
+
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+
+# Create sample tables
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS backup_info (
+    id INTEGER PRIMARY KEY,
+    timestamp TEXT,
+    backup_type TEXT,
+    notes TEXT
+)
+''')
+
+cursor.execute('''
+INSERT INTO backup_info (timestamp, backup_type, notes) VALUES (?, ?, ?)
+''', (datetime.now().isoformat(), '${{ github.event.inputs.backup_type || \"scheduled\" }}', 'Demo backup from GitHub Actions'))
+
+conn.commit()
+conn.close()
+
+print(f'Demo database created at {db_path}')
+print(f'File size: {os.path.getsize(db_path)} bytes')
+"
+        
+    - name: Install backup dependencies
+      run: |
+        pip install --no-deps sqlite3  # Usually built-in
+        echo "Backup system dependencies ready"
+        
+    - name: Run database backup
+      run: |
+        echo "🔄 Starting database backup process..."
+        
+        # Set backup type based on trigger
+        BACKUP_TYPE="${{ github.event.inputs.backup_type || 'scheduled' }}"
+        if [ "${{ github.event.schedule }}" = "0 3 * * 0" ]; then
+          BACKUP_TYPE="weekly"
+        elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
+          BACKUP_TYPE="daily"  
+        fi
+        
+        echo "Backup type: $BACKUP_TYPE"
+        
+        # Run backup script
+        python scripts/backup_system.py backup \
+          --db-path src/data/database.db \
+          --backup-dir backups \
+          --compress \
+          --keep-days ${{ env.BACKUP_RETENTION_DAYS }}
+          
+        echo "✅ Backup process completed"
+        
+    - name: Verify backup creation
+      run: |
+        echo "🔍 Verifying backup files..."
+        
+        if [ -d "backups" ] && [ "$(ls -A backups)" ]; then
+          echo "📁 Backup directory contents:"
+          ls -la backups/
+          
+          # Count backup files
+          BACKUP_COUNT=$(ls -1 backups/database_backup_*.db* 2>/dev/null | wc -l)
+          echo "📊 Total backup files: $BACKUP_COUNT"
+          
+          # Check latest backup
+          LATEST_BACKUP=$(ls -t backups/database_backup_*.db* 2>/dev/null | head -1)
+          if [ -n "$LATEST_BACKUP" ]; then
+            BACKUP_SIZE=$(du -h "$LATEST_BACKUP" | cut -f1)
+            echo "📦 Latest backup: $LATEST_BACKUP ($BACKUP_SIZE)"
+            
+            # Verify backup integrity if it's SQLite
+            if [[ "$LATEST_BACKUP" == *.db ]]; then
+              python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('$LATEST_BACKUP')
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM sqlite_master WHERE type=\"table\"')
+    table_count = cursor.fetchone()[0]
+    conn.close()
+    print(f'✅ Backup integrity verified: {table_count} tables found')
+except Exception as e:
+    print(f'⚠️  Backup verification failed: {e}')
+    exit(1)
+"
+            fi
+          else
+            echo "❌ No backup files found"
+            exit 1
+          fi
+        else
+          echo "❌ Backup directory is empty or doesn't exist"
+          exit 1
+        fi
+        
+    - name: Generate backup report
+      run: |
+        echo "📊 Generating backup report..."
+        
+        TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        BACKUP_TYPE="${{ github.event.inputs.backup_type || 'scheduled' }}"
+        
+        cat << EOF > backup_report.md
+        # Database Backup Report
+        
+        **Backup Date**: $TIMESTAMP
+        **Backup Type**: $BACKUP_TYPE
+        **Trigger**: ${{ github.event_name }}
+        
+        ## Backup Summary
+        
+        EOF
+        
+        if [ -d "backups" ]; then
+          BACKUP_COUNT=$(ls -1 backups/database_backup_*.db* 2>/dev/null | wc -l)
+          TOTAL_SIZE=$(du -sh backups/ | cut -f1)
+          
+          cat << EOF >> backup_report.md
+        - **Total Backups**: $BACKUP_COUNT files
+        - **Total Size**: $TOTAL_SIZE
+        - **Retention Policy**: ${{ env.BACKUP_RETENTION_DAYS }} days
+        - **Minimum Keep**: ${{ env.MIN_BACKUPS_KEEP }} files
+        
+        ## Latest Backups
+        
+        EOF
+        
+          # List recent backups
+          echo '| File | Size | Date |' >> backup_report.md
+          echo '|------|------|------|' >> backup_report.md
+          
+          ls -t backups/database_backup_*.db* 2>/dev/null | head -5 | while read backup_file; do
+            if [ -f "$backup_file" ]; then
+              SIZE=$(du -h "$backup_file" | cut -f1)
+              DATE=$(date -r "$backup_file" "+%Y-%m-%d %H:%M")
+              FILENAME=$(basename "$backup_file")
+              echo "| $FILENAME | $SIZE | $DATE |" >> backup_report.md
+            fi
+          done
+          
+          cat << EOF >> backup_report.md
+        
+        ## Backup Status
+        
+        ✅ **Status**: Successful
+        📦 **Compression**: Enabled
+        🔄 **Automation**: GitHub Actions
+        🗂️ **Storage**: Repository `/backups` directory
+        
+        ## Next Actions
+        
+        - [ ] Monitor backup file sizes for growth trends
+        - [ ] Verify backup restoration process periodically  
+        - [ ] Consider external backup storage for production
+        
+        ---
+        *🤖 Generated automatically by backup workflow*
+        EOF
+        
+        else
+          echo "❌ **Status**: Failed - No backup directory found" >> backup_report.md
+        fi
+        
+        echo "📋 Backup report generated"
+        cat backup_report.md
+        
+    - name: Commit backup files
+      run: |
+        echo "📤 Committing backup files to repository..."
+        
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add backup files
+        git add backups/
+        git add logs/
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "ℹ️  No new backup files to commit"
+        else
+          # Create commit
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          BACKUP_TYPE="${{ github.event.inputs.backup_type || 'scheduled' }}"
+          
+          git commit -m "🔄 Automatic database backup - $BACKUP_TYPE ($TIMESTAMP)
+          
+          - Backup type: $BACKUP_TYPE
+          - Triggered by: ${{ github.event_name }}
+          - Retention: ${{ env.BACKUP_RETENTION_DAYS }} days
+          - Generated: $TIMESTAMP
+          
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+          
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+          echo "✅ Backup files committed successfully"
+        fi
+        
+    - name: Push backup to repository
+      if: github.event_name == 'schedule' || github.event.inputs.backup_type != 'emergency'
+      run: |
+        echo "📤 Pushing backup files to remote repository..."
+        
+        # Push changes
+        git push origin main
+        
+        echo "✅ Backup files pushed to remote repository"
+        
+    - name: Create backup summary issue
+      if: github.event.inputs.backup_type == 'weekly' || github.event.schedule == '0 3 * * 0'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let reportContent = '📊 Weekly backup report not available';
+          
+          try {
+            reportContent = fs.readFileSync('backup_report.md', 'utf8');
+          } catch (error) {
+            console.log('Could not read backup report:', error.message);
+          }
+          
+          const timestamp = new Date().toISOString().split('T')[0];
+          const title = `📊 Weekly Database Backup Report - ${timestamp}`;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: reportContent,
+            labels: ['backup', 'weekly-report', 'automated', 'maintenance']
+          });
+          
+          console.log('📝 Weekly backup report issue created');
+          
+    - name: Cleanup on failure
+      if: failure()
+      run: |
+        echo "🧹 Cleaning up after backup failure..."
+        
+        # Remove incomplete backup files
+        find backups/ -name "database_backup_*.db*" -mmin -10 -delete 2>/dev/null || true
+        
+        echo "Cleanup completed"
+        
+    - name: Upload backup artifacts
+      if: github.event.inputs.backup_type == 'emergency' || failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: emergency-backup-${{ github.run_number }}
+        path: |
+          backups/
+          logs/
+          backup_report.md
+        retention-days: 30

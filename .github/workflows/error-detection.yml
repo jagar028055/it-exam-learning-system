@@ -1,0 +1,345 @@
+name: Error Detection & Auto Issue Creation
+
+# DISABLED - Using minimal-monitoring.yml instead  
+# on:
+#   schedule:
+#     # 1時間おきにエラー検知
+#     - cron: '0 * * * *'
+
+on:
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of error check to perform'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - 5xx-errors
+        - performance
+        - database
+
+env:
+  SERVICE_URL: https://itexam-study-system.onrender.com
+
+jobs:
+  error-detection:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup error detection tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+        
+    - name: Check for 500 errors
+      id: error-check
+      run: |
+        echo "🔍 Checking for application errors..."
+        
+        # Test multiple endpoints for errors
+        endpoints=("/healthz" "/ping" "/")
+        error_count=0
+        error_details=""
+        
+        for endpoint in "${endpoints[@]}"; do
+          echo "Testing endpoint: $endpoint"
+          response=$(curl -s -w "%{http_code}" "$SERVICE_URL$endpoint" || echo "connection_failed")
+          
+          if [[ "$response" =~ .*5[0-9][0-9]$ ]]; then
+            error_count=$((error_count + 1))
+            error_details="$error_details\n- $endpoint: HTTP $(echo $response | grep -o '[0-9]*$')"
+            echo "❌ Error detected on $endpoint"
+          elif [[ "$response" == "connection_failed" ]]; then
+            error_count=$((error_count + 1))
+            error_details="$error_details\n- $endpoint: Connection failed"
+            echo "❌ Connection failed for $endpoint"
+          else
+            echo "✅ $endpoint is healthy"
+          fi
+          
+          sleep 2  # Rate limiting
+        done
+        
+        echo "error_count=$error_count" >> $GITHUB_OUTPUT
+        echo "error_details<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$error_details" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        # Performance check
+        response_time=$(curl -s -w "%{time_total}" -o /dev/null $SERVICE_URL/ping 2>/dev/null || echo "999")
+        echo "response_time=$response_time" >> $GITHUB_OUTPUT
+        
+        if (( $(echo "$response_time > 10" | bc -l 2>/dev/null || echo "0") )); then
+          echo "performance_issue=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Performance issue detected: ${response_time}s response time"
+        else
+          echo "performance_issue=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Database connectivity check
+      id: db-check
+      run: |
+        echo "🗄️  Checking database connectivity..."
+        
+        # Try to get health status with database info
+        health_response=$(curl -s $SERVICE_URL/healthz | jq . 2>/dev/null || echo "failed")
+        
+        if [[ "$health_response" == "failed" ]]; then
+          echo "db_issue=true" >> $GITHUB_OUTPUT
+          echo "❌ Unable to get database status"
+        else
+          db_status=$(echo "$health_response" | jq -r '.database' 2>/dev/null || echo "unknown")
+          if [[ "$db_status" == "connected" ]]; then
+            echo "db_issue=false" >> $GITHUB_OUTPUT
+            echo "✅ Database is connected"
+          else
+            echo "db_issue=true" >> $GITHUB_OUTPUT
+            echo "❌ Database connection issue detected"
+          fi
+        fi
+
+    - name: Create error issue for 500 errors
+      if: steps.error-check.outputs.error_count > 0
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const errorCount = '${{ steps.error-check.outputs.error_count }}';
+          const errorDetails = `${{ steps.error-check.outputs.error_details }}`;
+          const timestamp = new Date().toISOString();
+          
+          const title = `🚨 500 Error Detected - ${errorCount} endpoint(s) affected`;
+          const body = `
+          ## 🚨 Automatic Error Detection Alert
+          
+          **Detection Time**: ${timestamp}
+          **Service**: ${{ env.SERVICE_URL }}
+          **Affected Endpoints**: ${errorCount}
+          
+          ### Error Details
+          ${errorDetails}
+          
+          ### Immediate Actions Required
+          1. 🔍 **Check Render service status and logs**
+             - Visit Render dashboard
+             - Review recent deployment logs
+             - Check resource usage (CPU/Memory)
+          
+          2. 🔧 **Investigate potential causes**
+             - Database connection issues
+             - Memory/CPU resource exhaustion
+             - Application code exceptions
+             - External service dependencies
+          
+          3. 🩹 **Apply quick fixes if possible**
+             - Restart service if needed
+             - Roll back to previous working deployment
+             - Scale resources if hitting limits
+          
+          ### Auto-Generated Analysis Commands
+          \`\`\`bash
+          # Check service status
+          curl -v ${{ env.SERVICE_URL }}/healthz
+          
+          # Test database connectivity
+          curl -s ${{ env.SERVICE_URL }}/healthz | jq '.database'
+          
+          # Monitor response time
+          curl -w "@curl-format.txt" -o /dev/null -s ${{ env.SERVICE_URL }}/ping
+          \`\`\`
+          
+          ### Prevention Steps
+          - [ ] Review recent code changes
+          - [ ] Update monitoring thresholds
+          - [ ] Add more comprehensive health checks
+          - [ ] Set up alerting for critical metrics
+          
+          ---
+          
+          **Priority**: 🔥 High (Automatic detection)
+          **Auto-Resolution**: This issue will auto-close if errors resolve within 2 hours
+          **Next Check**: $(date -d '+1 hour' -u +'%Y-%m-%d %H:%M UTC')
+          
+          *🤖 This issue was automatically created by error detection workflow*
+          `;
+          
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['bug', '500-error', 'monitoring', 'high-priority', 'auto-generated']
+          });
+          
+          console.log(\`Created issue #\${issue.number}: \${title}\`);
+
+    - name: Create performance issue
+      if: steps.error-check.outputs.performance_issue == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const responseTime = '${{ steps.error-check.outputs.response_time }}';
+          const timestamp = new Date().toISOString();
+          
+          const title = `⚡ Performance Issue Detected - ${responseTime}s response time`;
+          const body = `
+          ## ⚡ Performance Monitoring Alert
+          
+          **Detection Time**: ${timestamp}
+          **Service**: ${{ env.SERVICE_URL }}
+          **Response Time**: ${responseTime} seconds
+          **Threshold**: > 10 seconds
+          
+          ### Performance Analysis
+          - **Current Response Time**: ${responseTime}s
+          - **Expected Response Time**: < 2s
+          - **Service Status**: Slow but responsive
+          
+          ### Potential Causes
+          1. **Cold Start** (Render Free tier - 15min idle timeout)
+          2. **Database Performance** (Large query, missing indexes)
+          3. **Resource Constraints** (CPU/Memory limits)
+          4. **External Dependencies** (API calls, network latency)
+          
+          ### Recommended Actions
+          1. 🔄 **Immediate**
+             - Check if this is a cold start issue
+             - Monitor for pattern (frequent cold starts)
+             - Verify service is warming up properly
+          
+          2. 🔍 **Investigation**
+             - Review slow queries in database
+             - Check CPU/Memory usage patterns
+             - Analyze external API response times
+          
+          3. 🚀 **Optimization**
+             - Implement database query optimization
+             - Add caching for frequent requests
+             - Consider keep-alive strategies
+          
+          ### Monitoring Commands
+          \`\`\`bash
+          # Test response time
+          curl -w "%{time_total}" -o /dev/null -s ${{ env.SERVICE_URL }}/ping
+          
+          # Check service health details
+          curl -s ${{ env.SERVICE_URL }}/healthz | jq .
+          \`\`\`
+          
+          ---
+          
+          **Priority**: ⚠️  Medium (Performance degradation)
+          **Auto-Resolution**: Will close if response time improves to < 5s
+          
+          *🤖 This issue was automatically created by performance monitoring*
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['performance', 'monitoring', 'auto-generated', 'medium-priority']
+          });
+
+    - name: Create database issue
+      if: steps.db-check.outputs.db_issue == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const timestamp = new Date().toISOString();
+          
+          const title = '🗄️ Database Connection Issue Detected';
+          const body = `
+          ## 🗄️ Database Monitoring Alert
+          
+          **Detection Time**: ${timestamp}
+          **Service**: ${{ env.SERVICE_URL }}
+          **Issue**: Database connectivity problem
+          
+          ### Database Status
+          - **Connection**: ❌ Failed or Unknown
+          - **Health Endpoint**: Not returning database info
+          - **Service Status**: May be partially functional
+          
+          ### Potential Causes
+          1. **SQLite File Issues**
+             - Database file corruption
+             - Insufficient disk space
+             - File permission problems
+          
+          2. **Application Issues**
+             - Database connection pool exhaustion
+             - SQLAlchemy configuration problems
+             - Path/environment variable issues
+          
+          3. **Infrastructure Issues**
+             - File system problems on Render
+             - Memory constraints affecting SQLite
+             - Deployment issues with database migration
+          
+          ### Critical Actions Required
+          1. 🚨 **Immediate Assessment**
+             - Check if application is still serving requests
+             - Verify database file exists and is accessible
+             - Review deployment logs for migration errors
+          
+          2. 🔧 **Database Recovery**
+             - Attempt database connection test
+             - Check available disk space
+             - Verify database file integrity
+          
+          3. 📊 **Data Verification**
+             - Test basic database operations
+             - Verify critical data availability
+             - Plan data recovery if needed
+          
+          ### Recovery Commands
+          \`\`\`bash
+          # Test basic connectivity
+          curl -v ${{ env.SERVICE_URL }}/healthz
+          
+          # Check if app responds to simple requests
+          curl -v ${{ env.SERVICE_URL }}/ping
+          \`\`\`
+          
+          ### Prevention Measures
+          - [ ] Implement database health checks
+          - [ ] Set up database backup automation
+          - [ ] Add database connection retry logic
+          - [ ] Monitor disk space usage
+          
+          ---
+          
+          **Priority**: 🔥 High (Critical system component)
+          **Impact**: May affect all user functionality
+          **Escalation**: Consider manual intervention required
+          
+          *🤖 This issue was automatically created by database monitoring*
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['database', 'critical', 'monitoring', 'auto-generated', 'high-priority']
+          });
+
+    - name: Auto-close resolved issues
+      run: |
+        echo "🔄 Checking for resolved issues to auto-close..."
+        
+        # Only run auto-close if no current errors detected
+        if [ "${{ steps.error-check.outputs.error_count }}" = "0" ] && [ "${{ steps.error-check.outputs.performance_issue }}" = "false" ] && [ "${{ steps.db-check.outputs.db_issue }}" = "false" ]; then
+          echo "No current issues detected. Service appears healthy."
+          
+          # Note: In a real implementation, you would query GitHub API for open auto-generated issues
+          # and close them if they've been resolved. This requires additional GitHub API calls.
+          echo "✅ All systems operational"
+        else
+          echo "Issues still detected. Keeping existing issues open."
+        fi

@@ -1,0 +1,216 @@
+name: Service Monitoring & Keep Alive
+
+# DISABLED - Using minimal-monitoring.yml instead
+# on:
+#   schedule:
+#     # スリープ防止: 15分間隔（9-17時, 月-金）
+#     - cron: '*/15 9-17 * * 1-5'  # JST work hours
+#     # ログ監視: 夜間1回
+#     - cron: '0 2 * * *'           # 2:00 AM daily
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'ping'
+        type: choice
+        options:
+        - ping
+        - health-check
+        - log-analysis
+        
+env:
+  SERVICE_URL: https://itexam-study-system.onrender.com
+  
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/15 9-17 * * 1-5' || github.event.inputs.action == 'ping'
+    
+    steps:
+    - name: Ping service to prevent sleep
+      run: |
+        echo "🔄 Keeping service alive..."
+        response=$(curl -s -w "%{http_code}" $SERVICE_URL/ping)
+        
+        if [ "$response" = "pong200" ]; then
+          echo "✅ Service is alive and responsive"
+        else
+          echo "⚠️  Service response: $response"
+          # Try health check as fallback
+          health_response=$(curl -s -f $SERVICE_URL/healthz || echo "failed")
+          if [ "$health_response" != "failed" ]; then
+            echo "✅ Health check passed as fallback"
+          else
+            echo "❌ Service appears to be down"
+            exit 1
+          fi
+        fi
+        
+    - name: Report status
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = '🚨 Service Keep-Alive Failed';
+          const body = `
+          ## Service Status Alert
+          
+          **Time**: ${new Date().toISOString()}
+          **Service**: ${process.env.SERVICE_URL}
+          **Issue**: Failed to ping service during keep-alive check
+          
+          ### Actions Taken
+          - Attempted ping to \`/ping\` endpoint
+          - Attempted fallback health check to \`/healthz\`
+          - Both checks failed
+          
+          ### Recommended Actions
+          1. Check Render service status
+          2. Review application logs
+          3. Verify service configuration
+          
+          ---
+          *This issue was automatically created by the monitoring workflow*
+          `;
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['bug', 'monitoring', 'auto-generated']
+          });
+
+  health-check:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'health-check'
+    
+    steps:
+    - name: Comprehensive health check
+      run: |
+        echo "🔍 Running comprehensive health check..."
+        
+        # Basic ping
+        echo "1. Testing ping endpoint..."
+        ping_result=$(curl -s -w "%{http_code}" $SERVICE_URL/ping || echo "failed")
+        echo "Ping result: $ping_result"
+        
+        # Health check with details
+        echo "2. Testing health endpoint..."
+        health_result=$(curl -s $SERVICE_URL/healthz | jq '.' 2>/dev/null || echo "failed")
+        echo "Health result: $health_result"
+        
+        # Response time check
+        echo "3. Testing response time..."
+        response_time=$(curl -s -w "%{time_total}" -o /dev/null $SERVICE_URL/ping)
+        echo "Response time: ${response_time}s"
+        
+        # Create summary
+        echo "## Health Check Summary" >> health_summary.md
+        echo "- **Ping**: $ping_result" >> health_summary.md
+        echo "- **Health**: $health_result" >> health_summary.md
+        echo "- **Response Time**: ${response_time}s" >> health_summary.md
+        echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> health_summary.md
+        
+    - name: Upload health summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: health-check-summary
+        path: health_summary.md
+
+  log-analysis:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 2 * * *' || github.event.inputs.action == 'log-analysis'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup log analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+        
+    - name: Analyze application logs
+      run: |
+        echo "📊 Analyzing application logs..."
+        
+        # Simulate log analysis (in real scenario, you'd fetch from Render API)
+        # For now, we'll create a template analysis
+        
+        cat << 'EOF' > log_analysis.json
+        {
+          "analysis_time": "$(date -u +"%Y-%m-%d %H:%M:%S UTC")",
+          "period": "last_24_hours",
+          "summary": {
+            "total_requests": "estimate_from_logs",
+            "error_count": "count_5xx_errors",
+            "warning_count": "count_4xx_errors",
+            "avg_response_time": "calculate_average"
+          },
+          "recommendations": [
+            "Review slow endpoints if avg_response_time > 2s",
+            "Investigate 5xx errors if error_count > 10",
+            "Check resource usage if warning_count > 50"
+          ]
+        }
+        EOF
+        
+        # Test if we can access service
+        service_status=$(curl -s -f $SERVICE_URL/healthz && echo "healthy" || echo "unhealthy")
+        
+        # Create analysis report
+        cat << EOF > daily_report.md
+        # Daily Service Analysis Report
+        
+        **Date**: $(date -u +"%Y-%m-%d")
+        **Service Status**: $service_status
+        **Analysis Period**: Last 24 hours
+        
+        ## Service Health
+        - Current Status: $service_status
+        - Service URL: $SERVICE_URL
+        
+        ## Recommendations
+        - Monitor error rates during peak hours
+        - Check database connection stability
+        - Verify SSL certificate validity
+        
+        ## Next Actions
+        - [ ] Review application performance metrics
+        - [ ] Update monitoring thresholds if needed
+        - [ ] Plan capacity adjustments for growth
+        
+        ---
+        *Generated by automated monitoring system*
+        EOF
+        
+    - name: Create monitoring report issue
+      if: github.event.schedule == '0 2 * * *'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('daily_report.md', 'utf8');
+          
+          // Check if there's already a report for today
+          const today = new Date().toISOString().split('T')[0];
+          const title = `📊 Daily Monitoring Report - ${today}`;
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: report,
+            labels: ['monitoring', 'daily-report', 'auto-generated']
+          });
+          
+    - name: Upload analysis artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-analysis
+        path: |
+          daily_report.md
+          log_analysis.json
