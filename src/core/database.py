@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from contextlib import contextmanager
 
 from .config import config
+from .cache_manager import cached_service, cache_manager
 from ..utils.utils import Logger, FileUtils, ValidationUtils, DataError
 
 class DatabaseManager:
@@ -423,6 +424,9 @@ class DatabaseManager:
             # 統計を更新
             self._update_statistics(conn, question_id, is_correct, response_time)
             
+            # 関連キャッシュを無効化
+            self._invalidate_related_cache()
+            
             return record_id
     
     def get_learning_records(self, question_id: int = None, 
@@ -551,8 +555,9 @@ class DatabaseManager:
             conn.commit()
     
     # 統計・分析関連
+    @cached_service.cached_method(ttl=300, key_prefix="stats")  # 5分キャッシュ
     def get_statistics(self, exam_type: str = None) -> Dict:
-        """統計情報を取得"""
+        """統計情報を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -582,8 +587,9 @@ class DatabaseManager:
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
     
+    @cached_service.cached_method(ttl=600, key_prefix="weak")  # 10分キャッシュ
     def get_weak_areas(self, exam_type: str = None, limit: int = 5) -> List[Dict]:
-        """弱点分野を取得"""
+        """弱点分野を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -612,8 +618,9 @@ class DatabaseManager:
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
     
+    @cached_service.cached_method(ttl=1800, key_prefix="progress")  # 30分キャッシュ
     def get_progress_over_time(self, exam_type: str = None, days: int = 30) -> List[Dict]:
-        """時系列での進捗を取得"""
+        """時系列での進捗を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -636,6 +643,28 @@ class DatabaseManager:
             
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
+    
+    def _invalidate_related_cache(self):
+        """関連キャッシュを無効化"""
+        try:
+            cached_service.invalidate_cache("stats:*")
+            cached_service.invalidate_cache("weak:*") 
+            cached_service.invalidate_cache("progress:*")
+            self.logger.debug("関連キャッシュを無効化しました")
+        except Exception as e:
+            self.logger.warning(f"キャッシュ無効化に失敗: {e}")
+    
+    def clear_all_cache(self):
+        """すべてのキャッシュをクリア"""
+        try:
+            cache_manager.clear()
+            self.logger.info("全キャッシュをクリアしました")
+        except Exception as e:
+            self.logger.error(f"キャッシュクリアに失敗: {e}")
+    
+    def get_cache_stats(self) -> Dict:
+        """キャッシュ統計を取得"""
+        return cache_manager.get_stats()
     
     # ユーティリティメソッド
     def _get_exam_category_id(self, conn: sqlite3.Connection, exam_code: str) -> int:
