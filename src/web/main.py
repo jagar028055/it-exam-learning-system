@@ -758,4 +758,5 @@ if __name__ == '__main__':
     os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
     
     # 開発サーバーを起動
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    debug_mode = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5001)

@@ -370,6 +370,32 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
+    <!-- CSRF Token -->
+    <script>
+        window.csrfToken = '{{ csrf_token() }}';
+        
+        // AJAX用CSRF設定
+        if (typeof $ !== 'undefined') {
+            $.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                        xhr.setRequestHeader("X-CSRFToken", window.csrfToken);
+                    }
+                }
+            });
+        }
+        
+        // Fetch API用CSRF設定
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            if (options.method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(options.method.toUpperCase())) {
+                options.headers = options.headers || {};
+                options.headers['X-CSRFToken'] = window.csrfToken;
+            }
+            return originalFetch(url, options);
+        };
+    </script>
+    
     <!-- Common JavaScript -->
     <script>
         // アニメーション関数
@@ -434,6 +460,15 @@
         document.addEventListener('DOMContentLoaded', function() {
             const forms = document.querySelectorAll('form');
             forms.forEach(form => {
+                // CSRFトークンを自動追加
+                if (form.method.toLowerCase() === 'post' && !form.querySelector('input[name="csrf_token"]')) {
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrf_token';
+                    csrfInput.value = window.csrfToken;
+                    form.appendChild(csrfInput);
+                }
+                
                 form.addEventListener('submit', function() {
                     showLoading();
                 });
