@@ -1,0 +1,72 @@
+<!-- 共通ナビゲーションコンポーネント (Bootstrap準拠) -->
+{% macro render_nav(current_page='') %}
+<nav class="navbar navbar-expand-lg navbar-light fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">
+            <i class="fas fa-graduation-cap me-2"></i>
+            IT試験学習システム
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link {{ 'active' if current_page == 'main' else '' }}" 
+                       href="{{ url_for('main.index') }}">
+                        <i class="fas fa-home me-1"></i>ホーム
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ 'active' if current_page == 'study' else '' }}" 
+                       href="{{ url_for('study.study') }}">
+                        <i class="fas fa-book-open me-1"></i>学習
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ 'active' if current_page == 'progress' else '' }}" 
+                       href="{{ url_for('progress.progress') }}">
+                        <i class="fas fa-chart-line me-1"></i>進捗
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ 'active' if current_page == 'reports' else '' }}" 
+                       href="{{ url_for('progress.reports') }}">
+                        <i class="fas fa-file-alt me-1"></i>レポート
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ 'active' if current_page == 'settings' else '' }}" 
+                       href="{{ url_for('settings.settings') }}">
+                        <i class="fas fa-cog me-1"></i>設定
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% endmacro %}
+
+{% macro render_breadcrumb(items) %}
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        {% for item in items %}
+            <li class="breadcrumb-item {{ 'active' if loop.last else '' }}" 
+                {% if loop.last %}aria-current="page"{% endif %}>
+                {% if item.url and not loop.last %}
+                    <a href="{{ item.url }}" class="text-decoration-none">
+                        <i class="fas fa-{{ 'home' if loop.first else 'chevron-right' }} me-1"></i>
+                        {{ item.title }}
+                    </a>
+                {% else %}
+                    <i class="fas fa-{{ 'home' if loop.first else 'chevron-right' }} me-1"></i>
+                    {{ item.title }}
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+</nav>
+{% endmacro %}

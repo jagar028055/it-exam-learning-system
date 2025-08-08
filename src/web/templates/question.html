@@ -1,4 +1,4 @@
-{% extends "web/base.html" %}
+{% extends "base.html" %}
 
 {% block title %}問題 {{ question_number }} - 情報技術者試験学習システム{% endblock %}
 
@@ -13,13 +13,17 @@
                         <i class="fas fa-question-circle"></i> 
                         問題 {{ question_number }} / {{ total_questions }}
                     </h5>
-                    <div>
+                    <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-primary">{{ question.category or 'その他' }}</span>
                         {% if question.difficulty_level %}
                             <span class="badge bg-secondary">
                                 難易度 {{ question.difficulty_level }}
                             </span>
                         {% endif %}
+                        <a href="{{ url_for('study') }}" class="btn btn-outline-danger btn-sm ms-2" 
+                           onclick="return confirm('学習を中断してメニューに戻りますか？')">
+                            <i class="fas fa-times"></i> 中断
+                        </a>
                     </div>
                 </div>
                 
@@ -314,7 +318,26 @@
             questionCard.style.opacity = '1';
             questionCard.style.transform = 'translateY(0)';
         }, 100);
+        
+        // セッション情報を保存
+        saveCurrentSessionToStorage();
     });
+    
+    // 現在のセッション情報をローカルストレージに保存
+    function saveCurrentSessionToStorage() {
+        const sessionData = {
+            current_question: {{ question_number }},
+            total_questions: {{ total_questions }},
+            question_id: {{ question.id or 0 }},
+            start_time: startTime,
+            page_url: window.location.pathname,
+            correct_count: 0 // 実際の値は別途更新
+        };
+        
+        if (typeof saveSessionToStorage === 'function') {
+            saveSessionToStorage(sessionData);
+        }
+    }
     
     // ページを離れる前の警告
     window.addEventListener('beforeunload', function(e) {

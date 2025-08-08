@@ -72,7 +72,7 @@ class FileUtils:
         if not file_path.exists():
             return ""
         
-        hash_md5 = hashlib.md5()
+        hash_md5 = hashlib.md5(usedforsecurity=False)
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)
@@ -277,7 +277,7 @@ class CacheUtils:
         else:
             data_str = str(data)
         
-        return hashlib.md5(data_str.encode()).hexdigest()
+        return hashlib.md5(data_str.encode(), usedforsecurity=False).hexdigest()
     
     @staticmethod
     def is_cache_valid(cache_path: Path, max_age_hours: int = 24) -> bool:

@@ -1,0 +1,94 @@
+<!-- 統計表示コンポーネント -->
+{% macro render_stats_card(title, value, subtitle='', icon='', trend='', class='') %}
+<div class="stats-card {{ class }}">
+    <div class="stats-content">
+        {% if icon %}
+            <div class="stats-icon">
+                <i class="{{ icon }}"></i>
+            </div>
+        {% endif %}
+        
+        <div class="stats-info">
+            <div class="stats-title">{{ title }}</div>
+            <div class="stats-value">{{ value }}</div>
+            {% if subtitle %}
+                <div class="stats-subtitle">{{ subtitle }}</div>
+            {% endif %}
+        </div>
+        
+        {% if trend %}
+            <div class="stats-trend {{ 'positive' if trend.startswith('+') else 'negative' if trend.startswith('-') else 'neutral' }}">
+                {{ trend }}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_progress_bar(percentage, title='', color='primary') %}
+<div class="progress-container">
+    {% if title %}
+        <div class="progress-title">{{ title }}</div>
+    {% endif %}
+    <div class="progress-bar">
+        <div class="progress-fill progress-{{ color }}" 
+             style="width: {{ percentage }}%"></div>
+    </div>
+    <div class="progress-text">{{ percentage }}%</div>
+</div>
+{% endmacro %}
+
+{% macro render_chart_placeholder(chart_id, title='', height='300px') %}
+<div class="chart-container" style="height: {{ height }}">
+    {% if title %}
+        <h4 class="chart-title">{{ title }}</h4>
+    {% endif %}
+    <canvas id="{{ chart_id }}" class="chart-canvas"></canvas>
+</div>
+{% endmacro %}
+
+{% macro render_stats_grid(stats_items) %}
+<div class="stats-grid">
+    {% for item in stats_items %}
+        {{ render_stats_card(
+            title=item.title,
+            value=item.value,
+            subtitle=item.subtitle or '',
+            icon=item.icon or '',
+            trend=item.trend or '',
+            class=item.class or ''
+        ) }}
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_recent_activity(activities, title='最近の活動') %}
+<div class="activity-container">
+    <h4 class="activity-title">{{ title }}</h4>
+    <div class="activity-list">
+        {% for activity in activities %}
+            <div class="activity-item">
+                <div class="activity-icon">
+                    <i class="{{ activity.icon or 'fas fa-circle' }}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-text">{{ activity.text }}</div>
+                    <div class="activity-time">{{ activity.time }}</div>
+                </div>
+                {% if activity.badge %}
+                    <div class="activity-badge {{ activity.badge.class }}">
+                        {{ activity.badge.text }}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        
+        {% if not activities %}
+            <div class="activity-empty">
+                <i class="fas fa-inbox"></i>
+                <p>まだ活動がありません</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

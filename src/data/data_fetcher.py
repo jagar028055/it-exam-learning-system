@@ -11,9 +11,27 @@ from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
-import PyPDF2
-import pdfplumber
-from tqdm import tqdm
+# Heavy dependencies with fallbacks
+try:
+    import PyPDF2
+    HAS_PYPDF2 = True
+except ImportError:
+    HAS_PYPDF2 = False
+
+try:
+    import pdfplumber
+    HAS_PDFPLUMBER = True
+except ImportError:
+    HAS_PDFPLUMBER = False
+
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    # Simple fallback for tqdm
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 from ..core.config import config
 from ..utils.utils import (

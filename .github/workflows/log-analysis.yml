@@ -1,0 +1,141 @@
+name: Log Analysis & Error Detection
+
+on:
+  schedule:
+    # 毎日午前2時にログ解析実行
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: '解析する過去の時間数'
+        required: false
+        default: '24'
+
+jobs:
+  log-analysis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Render CLI
+      run: |
+        npm install -g @render-cli/cli
+        
+    - name: Fetch logs and analyze
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        # Render CLIでログを取得
+        echo "Fetching logs from Render..."
+        
+        # 過去24時間のログを取得
+        hours="${{ github.event.inputs.hours || '24' }}"
+        
+        # ログファイルに保存
+        render logs --service=$RENDER_SERVICE_ID --tail=1000 > latest.log 2>&1 || true
+        
+        echo "Analyzing logs for errors..."
+        
+        # 500エラーをカウント
+        error_500=$(grep -c " 500 " latest.log || echo "0")
+        error_4xx=$(grep -c " 4[0-9][0-9] " latest.log || echo "0") 
+        error_total=$(grep -c "ERROR" latest.log || echo "0")
+        
+        echo "Found $error_500 5xx errors, $error_4xx 4xx errors, $error_total ERROR logs"
+        
+        # エラーサマリーファイル作成
+        cat > error_summary.md << EOF
+        # ログ解析レポート - $(date)
+        
+        ## エラー統計
+        - **500エラー**: $error_500 件
+        - **4xxエラー**: $error_4xx 件  
+        - **ERRORログ**: $error_total 件
+        
+        ## 最新の500エラー (直近5件)
+        \`\`\`
+        $(grep " 500 " latest.log | tail -5)
+        \`\`\`
+        
+        ## 最新のERRORログ (直近5件)
+        \`\`\`
+        $(grep "ERROR" latest.log | tail -5)
+        \`\`\`
+        EOF
+        
+        # エラーが検出された場合の処理
+        if [ "$error_500" -gt "0" ] || [ "$error_total" -gt "10" ]; then
+          echo "CRITICAL_ERRORS_FOUND=true" >> $GITHUB_ENV
+          echo "ERROR_500_COUNT=$error_500" >> $GITHUB_ENV
+          echo "ERROR_TOTAL_COUNT=$error_total" >> $GITHUB_ENV
+        else
+          echo "CRITICAL_ERRORS_FOUND=false" >> $GITHUB_ENV
+        fi
+        
+    - name: Upload log analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: log-analysis-${{ github.run_id }}
+        path: |
+          latest.log
+          error_summary.md
+          
+    - name: Create issue for critical errors
+      if: env.CRITICAL_ERRORS_FOUND == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const errorSummary = fs.readFileSync('error_summary.md', 'utf8');
+          
+          const title = `🚨 500エラー検知 - ${process.env.ERROR_500_COUNT}件 (${new Date().toISOString().split('T')[0]})`;
+          const body = `${errorSummary}
+          
+          ## 対応手順
+          - [ ] エラーログを確認し根本原因を特定
+          - [ ] 修正パッチを作成
+          - [ ] テスト環境で動作確認
+          - [ ] 本番環境へデプロイ
+          
+          ## 自動化可能な対応
+          この Issue に \`@claude-fix\` とコメントすると、Claude が自動でパッチを生成します。
+          
+          ### アーティファクト
+          - [ログ解析結果](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['500-error', 'critical', 'auto-detected']
+          });
+          
+    - name: Generate daily report
+      if: env.CRITICAL_ERRORS_FOUND == 'false'
+      run: |
+        echo "No critical errors found. Generating daily report..."
+        
+        cat > daily_report.md << EOF
+        # 日次システムレポート - $(date)
+        
+        ✅ **システム状態**: 正常
+        📊 **解析期間**: 過去24時間
+        
+        ## 統計情報
+        - 500エラー: 0件
+        - 4xxエラー: ${ERROR_4XX_COUNT:-0}件
+        - 総リクエスト数: $(grep -c "GET\|POST\|PUT\|DELETE" latest.log || echo "N/A")
+        
+        ## 推奨事項
+        - システムは正常に稼働しています
+        - 定期的なヘルスチェックを継続してください
+        
+        EOF

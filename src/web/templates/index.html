@@ -1,4 +1,4 @@
-{% extends "web/base.html" %}
+{% extends "base.html" %}
 
 {% block title %}ホーム - 情報技術者試験学習システム{% endblock %}
 
@@ -128,25 +128,25 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="{{ url_for('study') }}" class="btn btn-primary btn-lg w-100">
+                        <a href="{{ url_for('study.study') }}" class="btn btn-primary btn-lg w-100">
                             <i class="fas fa-book"></i><br>
                             学習開始
                         </a>
                     </div>
                     <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="{{ url_for('study') }}?mode=mock_exam" class="btn btn-success btn-lg w-100">
+                        <a href="{{ url_for('study.study') }}?mode=mock_exam" class="btn btn-success btn-lg w-100">
                             <i class="fas fa-clipboard-check"></i><br>
                             模擬試験
                         </a>
                     </div>
                     <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="{{ url_for('progress') }}" class="btn btn-info btn-lg w-100">
+                        <a href="{{ url_for('progress.progress') }}" class="btn btn-info btn-lg w-100">
                             <i class="fas fa-chart-line"></i><br>
                             進捗確認
                         </a>
                     </div>
                     <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="{{ url_for('reports') }}" class="btn btn-warning btn-lg w-100">
+                        <a href="{{ url_for('progress.reports') }}" class="btn btn-warning btn-lg w-100">
                             <i class="fas fa-file-alt"></i><br>
                             レポート
                         </a>

@@ -1,0 +1,184 @@
+<!-- 問題表示コンポーネント -->
+{% macro render_question_card(question, show_answer=false, answer_result=none) %}
+<div class="question-card">
+    <div class="question-header">
+        <div class="question-info">
+            <span class="question-category">{{ question.category }}</span>
+            <span class="question-difficulty difficulty-{{ question.difficulty }}">
+                {{ question.difficulty }}
+            </span>
+        </div>
+        <div class="question-number">
+            問題 {{ question.id }}
+        </div>
+    </div>
+    
+    <div class="question-content">
+        <div class="question-text">
+            {{ question.question_text | safe }}
+        </div>
+        
+        <div class="question-choices">
+            {% for choice in question.choices %}
+                <div class="choice-item 
+                    {{ 'correct' if show_answer and loop.index0 == question.correct_answer else '' }}
+                    {{ 'selected' if answer_result and loop.index0 == answer_result.user_answer else '' }}
+                    {{ 'incorrect' if answer_result and loop.index0 == answer_result.user_answer and not answer_result.is_correct else '' }}">
+                    
+                    <label class="choice-label">
+                        <input type="radio" 
+                               name="question_{{ question.id }}" 
+                               value="{{ loop.index0 }}"
+                               class="choice-input"
+                               {% if show_answer %}disabled{% endif %}>
+                        <span class="choice-marker">{{ loop.index | chr(64) }}</span>
+                        <span class="choice-text">{{ choice }}</span>
+                    </label>
+                    
+                    {% if show_answer and loop.index0 == question.correct_answer %}
+                        <i class="fas fa-check-circle choice-icon correct-icon"></i>
+                    {% elif answer_result and loop.index0 == answer_result.user_answer and not answer_result.is_correct %}
+                        <i class="fas fa-times-circle choice-icon incorrect-icon"></i>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        
+        {% if show_answer and question.explanation %}
+            <div class="question-explanation">
+                <h5>解説</h5>
+                <p>{{ question.explanation | safe }}</p>
+            </div>
+        {% endif %}
+        
+        {% if answer_result %}
+            <div class="answer-result">
+                <div class="result-status {{ 'correct' if answer_result.is_correct else 'incorrect' }}">
+                    {% if answer_result.is_correct %}
+                        <i class="fas fa-check-circle"></i> 正解
+                    {% else %}
+                        <i class="fas fa-times-circle"></i> 不正解
+                    {% endif %}
+                </div>
+                
+                {% if answer_result.response_time %}
+                    <div class="response-time">
+                        回答時間: {{ answer_result.response_time }}秒
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_question_list(questions, show_answers=false, pagination=none) %}
+<div class="question-list">
+    {% for question in questions %}
+        {{ render_question_card(question, show_answers) }}
+    {% endfor %}
+    
+    {% if not questions %}
+        {{ render_empty_state('問題が見つかりません', '指定された条件に合う問題がありません。', 'fas fa-question-circle') }}
+    {% endif %}
+    
+    {% if pagination %}
+        {{ render_pagination(pagination) }}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_question_filters(current_filters={}) %}
+<div class="question-filters">
+    <form method="GET" class="filter-form">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="exam_type">試験区分</label>
+                <select name="exam_type" id="exam_type" class="form-select">
+                    <option value="">すべて</option>
+                    {% for exam_type, exam_name in exam_types.items() %}
+                        <option value="{{ exam_type }}" 
+                                {% if current_filters.exam_type == exam_type %}selected{% endif %}>
+                            {{ exam_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="category">分野</label>
+                <select name="category" id="category" class="form-select">
+                    <option value="">すべて</option>
+                    {% for category in categories %}
+                        <option value="{{ category }}" 
+                                {% if current_filters.category == category %}selected{% endif %}>
+                            {{ category }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="difficulty">難易度</label>
+                <select name="difficulty" id="difficulty" class="form-select">
+                    <option value="">すべて</option>
+                    <option value="easy" {% if current_filters.difficulty == 'easy' %}selected{% endif %}>簡単</option>
+                    <option value="medium" {% if current_filters.difficulty == 'medium' %}selected{% endif %}>普通</option>
+                    <option value="hard" {% if current_filters.difficulty == 'hard' %}selected{% endif %}>難しい</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <button type="submit" class="btn btn-primary">フィルター適用</button>
+                <a href="{{ request.url_root }}{{ request.endpoint }}" class="btn btn-secondary">クリア</a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endmacro %}
+
+{% macro render_pagination(pagination) %}
+{% if pagination.pages > 1 %}
+    <nav class="pagination-nav">
+        <ul class="pagination">
+            {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.prev_num, **request.args) }}">
+                        <i class="fas fa-chevron-left"></i> 前へ
+                    </a>
+                </li>
+            {% endif %}
+            
+            {% for page_num in range(1, pagination.pages + 1) %}
+                {% if page_num == pagination.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                {% elif page_num <= 3 or page_num > pagination.pages - 3 or (page_num >= pagination.page - 1 and page_num <= pagination.page + 1) %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for(request.endpoint, page=page_num, **request.args) }}">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                {% elif page_num == 4 or page_num == pagination.pages - 3 %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.next_num, **request.args) }}">
+                        次へ <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+        
+        <div class="pagination-info">
+            {{ pagination.total }}件中 {{ (pagination.page - 1) * pagination.per_page + 1 }}〜{{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }}件を表示
+        </div>
+    </nav>
+{% endif %}
+{% endmacro %}

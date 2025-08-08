@@ -1,0 +1,39 @@
+name: Issue Triage by Gemini
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  triage:
+    if: >
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/triage'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gemini CLI Action
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          prompt: |
+            あなたはIT試験学習システムの Issue トリアージ専門家です。
+            以下のIssueを分析し、適切な分類・優先度・次のアクションを提案してください。
+            
+            **分類ラベル**: bug, feature, improvement, security, performance, ui/ux, database, deployment
+            **優先度**: Critical, High, Medium, Low
+            
+            GEMINI.mdの基準を参考に、以下を含めてください：
+            1. **Issue分類**: 最適なラベル提案
+            2. **優先度判定**: 理由付きの優先度
+            3. **技術的観点**: 関連するコンポーネント特定
+            4. **次のアクション**: 具体的な対応手順
+            
+            Issue: ${{ github.event.issue.title }}
+            詳細: ${{ github.event.issue.body }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION || 'latest' }}
+

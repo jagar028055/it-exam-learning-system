@@ -11,7 +11,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from src.web.app import app
+from src.web.main import app
 from src.core.config import config
 
 if __name__ == '__main__':

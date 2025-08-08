@@ -13,7 +13,13 @@ from typing import Dict, List, Optional
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_file
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
+from flask_talisman import Talisman
 import secrets
+import os
+from dotenv import load_dotenv
+
+# 環境変数を読み込み
+load_dotenv()
 
 # プロジェクトルートをパスに追加
 import sys
@@ -31,17 +37,46 @@ from src.utils.utils import Logger, SystemError, ValidationError
 app = Flask(__name__, 
             template_folder='templates',
             static_folder='static')
-app.config['SECRET_KEY'] = secrets.token_hex(16)
+
+# 静的ファイルキャッシュ設定（本番環境のみ）
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1年
+
+@app.after_request
+def after_request(response):
+    """レスポンスヘッダーの設定"""
+    # 静的ファイルのキャッシュ設定
+    if request.endpoint == 'static':
+        response.cache_control.max_age = 31536000  # 1年
+        response.cache_control.public = True
+    return response
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_FILE_DIR'] = str(config.PROJECT_ROOT / 'flask_session')
+app.config['SESSION_FILE_DIR'] = os.environ.get('SESSION_FILE_DIR', str(config.PROJECT_ROOT / 'flask_session'))
 
 # セッション設定
 Session(app)
 
 # CSRF保護
 csrf = CSRFProtect(app)
+
+# セキュリティヘッダー設定（本番環境のみ）
+if os.environ.get('FLASK_ENV') == 'production':
+    csp = {
+        'default-src': "'self'",
+        'script-src': "'self' 'unsafe-inline'",
+        'style-src': "'self' 'unsafe-inline'",
+        'img-src': "'self' data:",
+        'font-src': "'self'",
+        'connect-src': "'self'",
+        'frame-src': "'none'"
+    }
+    Talisman(app, 
+             force_https=True,
+             strict_transport_security=True,
+             content_security_policy=csp)
 
 # ログ設定
 logging.basicConfig(
@@ -86,6 +121,14 @@ def grade_class_filter(rate):
     else:
         return "danger"
 
+@app.template_filter('chr')
+def chr_filter(value):
+    """数値を文字に変換するフィルター"""
+    try:
+        return chr(int(value))
+    except (ValueError, TypeError):
+        return str(value)
+
 # ルート定義
 @app.route('/')
 def index():
@@ -114,7 +157,7 @@ def study():
     """学習ページ"""
     try:
         # 利用可能な試験種別を取得
-        exam_types = list(config.EXAM_CATEGORIES.keys())
+        exam_types = config.EXAM_CATEGORIES
         
         # 分野情報を取得
         categories = list(config.SUBJECT_CATEGORIES.keys())
@@ -125,7 +168,7 @@ def study():
     except Exception as e:
         logger.error(f"学習ページエラー: {e}")
         flash(f"エラーが発生しました: {e}", 'error')
-        return render_template('study.html', exam_types=[], categories=[])
+        return render_template('study.html', exam_types={}, categories=[])
 
 @app.route('/start_session', methods=['POST'])
 def start_session():
@@ -286,13 +329,16 @@ def session_result():
         total_questions = len(answers)
         correct_count = sum(1 for ans in answers if ans['is_correct'])
         
+        duration = _calculate_session_duration()
+        
         summary = {
             'total_questions': total_questions,
             'correct_answers': correct_count,
             'incorrect_answers': total_questions - correct_count,
-            'correct_rate': (correct_count / total_questions * 100) if total_questions > 0 else 0,
+            'correct_rate': (correct_count / total_questions) if total_questions > 0 else 0,
             'session_name': f"学習セッション_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'duration': _calculate_session_duration()
+            'total_time': duration,
+            'average_response_time': duration / total_questions if total_questions > 0 else 0
         }
         
         # セッション終了をデータベースに記録
@@ -712,4 +758,5 @@ if __name__ == '__main__':
     os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
     
     # 開発サーバーを起動
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    debug_mode = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5001)

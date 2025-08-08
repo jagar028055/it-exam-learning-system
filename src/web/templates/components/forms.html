@@ -1,0 +1,112 @@
+<!-- 共通フォームコンポーネント -->
+{% macro render_form_field(field_type, name, label, value='', required=false, options=[], placeholder='', help_text='', error='') %}
+<div class="form-field">
+    <label for="{{ name }}" class="form-Label">
+        {{ label }}
+        {% if required %}<span class="required">*</span>{% endif %}
+    </label>
+    
+    {% if field_type == 'text' or field_type == 'email' or field_type == 'password' %}
+        <input type="{{ field_type }}" 
+               id="{{ name }}" 
+               name="{{ name }}" 
+               value="{{ value }}"
+               class="form-input {{ 'error' if error else '' }}"
+               {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+               {% if required %}required{% endif %}>
+    
+    {% elif field_type == 'textarea' %}
+        <textarea id="{{ name }}" 
+                  name="{{ name }}" 
+                  class="form-textarea {{ 'error' if error else '' }}"
+                  {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+                  {% if required %}required{% endif %}>{{ value }}</textarea>
+    
+    {% elif field_type == 'select' %}
+        <select id="{{ name }}" 
+                name="{{ name }}" 
+                class="form-select {{ 'error' if error else '' }}"
+                {% if required %}required{% endif %}>
+            {% if not required %}
+                <option value="">選択してください</option>
+            {% endif %}
+            {% for option in options %}
+                <option value="{{ option.value }}" 
+                        {% if option.value == value %}selected{% endif %}>
+                    {{ option.text }}
+                </option>
+            {% endfor %}
+        </select>
+    
+    {% elif field_type == 'checkbox' %}
+        <div class="form-checkbox">
+            <input type="checkbox" 
+                   id="{{ name }}" 
+                   name="{{ name }}" 
+                   value="1"
+                   {% if value %}checked{% endif %}
+                   class="form-checkbox-input">
+            <label for="{{ name }}" class="form-checkbox-label">{{ label }}</label>
+        </div>
+    
+    {% elif field_type == 'radio' %}
+        <div class="form-radio-group">
+            {% for option in options %}
+                <div class="form-radio">
+                    <input type="radio" 
+                           id="{{ name }}_{{ loop.index }}" 
+                           name="{{ name }}" 
+                           value="{{ option.value }}"
+                           {% if option.value == value %}checked{% endif %}
+                           class="form-radio-input">
+                    <label for="{{ name }}_{{ loop.index }}" class="form-radio-label">
+                        {{ option.text }}
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    {% if help_text %}
+        <div class="form-help">{{ help_text }}</div>
+    {% endif %}
+    
+    {% if error %}
+        <div class="form-error">{{ error }}</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_submit_button(text='送信', class='btn-primary', disabled=false) %}
+<button type="submit" 
+        class="btn {{ class }}"
+        {% if disabled %}disabled{% endif %}>
+    {{ text }}
+</button>
+{% endmacro %}
+
+{% macro render_card(title='', content='', actions=[], class='') %}
+<div class="card {{ class }}">
+    {% if title %}
+        <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+        </div>
+    {% endif %}
+    
+    <div class="card-body">
+        {{ content }}
+    </div>
+    
+    {% if actions %}
+        <div class="card-footer">
+            {% for action in actions %}
+                <a href="{{ action.url }}" 
+                   class="btn {{ action.class or 'btn-secondary' }}">
+                    {% if action.icon %}<i class="{{ action.icon }}"></i>{% endif %}
+                    {{ action.text }}
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endmacro %}
