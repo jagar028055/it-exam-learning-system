@@ -1,28 +1,39 @@
-# ファイル名: .github/workflows/issue-gemini-trigger.yml
-
-name: Issueが作成されたらGeminiで整理する
-
+name: Issue Triage by Gemini
 on:
   issues:
-    types: [opened, reopened] # Issueが「作成された」または「再オープンされた」ときに、このワークフローを動かす
+    types: [opened]
+  issue_comment:
+    types: [created]
 
 jobs:
-  call_issue_triage_tool: # このジョブの名前は何でもOK
-    runs-on: ubuntu-latest # GitHubが提供する仮想環境で動かす
+  triage:
+    if: >
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/triage'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - name: GeminiのIssue整理ツールを呼び出す
-        # ここをあなたのGitHubユーザー名/組織名と、github-actions-reusableリポジトリの正確なパスに置き換えてください。
-        # 例: uses: your-github-username/github-actions-reusable/.github/workflows/reusable/issue-triage.yml@main
-        uses: jagar028055/github-actions-reusable/.github/workflows/reusable/issue-triage.yml@main
-
+      - uses: actions/checkout@v4
+      - name: Run Gemini CLI Action
+        uses: google-github-actions/run-gemini-cli@v0
         with:
-          # 呼び出した道具に渡す情報（Issueのタイトルと本文を渡す例）
-          prompt: "このIssueを整理してください: ${{ github.event.issue.title }}
-
-詳細: ${{ github.event.issue.body }}"
-
-        secrets:
-          # Geminiを使うためのAPIキーを、GitHubに安全に渡す
-          # この「GEMINI_API_KEY」は、GitHubリポジトリのSettings -> Secrets -> Actions で設定する必要があります。
+          prompt: |
+            あなたはIT試験学習システムの Issue トリアージ専門家です。
+            以下のIssueを分析し、適切な分類・優先度・次のアクションを提案してください。
+            
+            **分類ラベル**: bug, feature, improvement, security, performance, ui/ux, database, deployment
+            **優先度**: Critical, High, Medium, Low
+            
+            GEMINI.mdの基準を参考に、以下を含めてください：
+            1. **Issue分類**: 最適なラベル提案
+            2. **優先度判定**: 理由付きの優先度
+            3. **技術的観点**: 関連するコンポーネント特定
+            4. **次のアクション**: 具体的な対応手順
+            
+            Issue: ${{ github.event.issue.title }}
+            詳細: ${{ github.event.issue.body }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION || 'latest' }}
 

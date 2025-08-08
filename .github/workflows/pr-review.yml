@@ -1,0 +1,35 @@
+name: PR Review by Gemini
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/review'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gemini CLI Action
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          prompt: |
+            あなたはIT試験学習システムの専門コードレビュアーです。
+            以下の観点で建設的なレビューコメントを提供してください：
+            
+            1. **セキュリティ**: CSRF保護、入力値検証、認証
+            2. **パフォーマンス**: DB最適化、メモリ使用量
+            3. **教育システム**: 学習データの整合性、統計精度
+            4. **コード品質**: 可読性、保守性、テスト
+            
+            GEMINI.mdの内容を参考に、プロジェクト固有の要件も考慮してください。
+            改善提案は具体的で実装可能なものにしてください。
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION || 'latest' }}
