@@ -113,31 +113,38 @@ class OptimizedDatabaseManager(DatabaseManager):
         
         return self.cache.cached_query(cache_key, query_func)
     
-    @DatabaseUtils.with_transaction(self)
-    def batch_record_answers(self, conn, answers: List[Dict]) -> List[int]:
+    def batch_record_answers(self, answers: List[Dict]) -> List[int]:
         """バッチで回答を記録"""
         record_ids = []
         
-        for answer_data in answers:
-            cursor = conn.execute("""
-                INSERT INTO learning_records (
-                    question_id, user_answer, is_correct, response_time,
-                    study_mode, notes, session_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                answer_data['question_id'],
-                answer_data['user_answer'],
-                answer_data['is_correct'],
-                answer_data.get('response_time'),
-                answer_data.get('study_mode', 'practice'),
-                answer_data.get('notes'),
-                answer_data.get('session_id')
-            ))
-            
-            record_ids.append(cursor.lastrowid)
-        
-        # 統計の一括更新
-        self._batch_update_statistics(conn, answers)
+        with self.get_connection() as conn:
+            try:
+                for answer_data in answers:
+                    cursor = conn.execute("""
+                        INSERT INTO learning_records (
+                            question_id, user_answer, is_correct, response_time,
+                            study_mode, notes, session_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        answer_data['question_id'],
+                        answer_data['user_answer'],
+                        answer_data['is_correct'],
+                        answer_data.get('response_time'),
+                        answer_data.get('study_mode', 'practice'),
+                        answer_data.get('notes'),
+                        answer_data.get('session_id')
+                    ))
+                    
+                    record_ids.append(cursor.lastrowid)
+                
+                # 統計の一括更新
+                self._batch_update_statistics(conn, answers)
+                conn.commit()
+                
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"バッチ回答記録エラー: {e}")
+                raise DatabaseError(f"バッチ回答記録に失敗しました: {e}")
         
         return record_ids
     
