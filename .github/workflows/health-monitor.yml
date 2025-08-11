@@ -9,11 +9,34 @@ on:
 jobs:
   health-check:
     runs-on: ubuntu-latest
+    outputs: 
+      should_run: ${{ steps.check.outputs.should_run }}
     steps:
+    - name: Check for existing failure issue
+      id: check
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'health-check-failure'
+          });
+          
+          if (issues.data.length > 0) {
+            console.log(`An open health-check-failure issue exists (#${issues.data[0].number}). Skipping health check.`);
+            return false;
+          }
+          
+          console.log('No open health-check-failure issue found. Proceeding with health check.');
+          return true;
+      
     - name: Keep service alive
+      if: steps.check.outputs.result == 'true'
       run: |
         echo "Pinging service to keep it alive..."
-        response=$(curl -s -o /dev/null -w "%{http_code}" https://itexam-study-system.onrender.com/healthz)
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://itexam-study-system.onrender.com/health)
         echo "Health check response: $response"
         
         if [ "$response" = "200" ]; then
@@ -24,7 +47,7 @@ jobs:
         fi
         
     - name: Create issue on failure
-      if: failure()
+      if: failure() && steps.check.outputs.result == 'true'
       uses: actions/github-script@v7
       with:
         script: |
@@ -32,7 +55,7 @@ jobs:
           const body = `## ヘルスチェックが失敗しました
           
           **時刻**: ${new Date().toISOString()}
-          **URL**: https://itexam-study-system.onrender.com/healthz
+          **URL**: https://itexam-study-system.onrender.com/health
           **ワークフロー**: ${context.workflow}
           **実行ID**: ${context.runId}
           
@@ -44,9 +67,11 @@ jobs:
           ### 関連リンク
           - [Render ダッシュボード](https://dashboard.render.com)
           - [ワークフロー実行](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          
+          このIssueがオープンである限り、ヘルスチェックは一時停止されます。
           `;
           
-          // 既存の未解決ヘルスチェックIssueがあるか確認
+          // 既存の未解決ヘルスチェックIssueがあるか確認（念のため）
           const issues = await github.rest.issues.listForRepo({
             owner: context.repo.owner,
             repo: context.repo.repo,

@@ -20,7 +20,7 @@
                                 難易度 {{ question.difficulty_level }}
                             </span>
                         {% endif %}
-                        <a href="{{ url_for('study') }}" class="btn btn-outline-danger btn-sm ms-2" 
+                        <a href="{{ url_for('study.study') }}" class="btn btn-outline-danger btn-sm ms-2" 
                            onclick="return confirm('学習を中断してメニューに戻りますか？')">
                             <i class="fas fa-times"></i> 中断
                         </a>

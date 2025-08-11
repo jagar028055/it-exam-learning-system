@@ -98,7 +98,8 @@ class ApplicationFactory:
             
             @app.after_request
             def after_request(response):
-                if app.request.endpoint == 'static':
+                from flask import request
+                if request.endpoint == 'static':
                     response.cache_control.max_age = 31536000
                     response.cache_control.public = True
                 return response
@@ -184,40 +185,42 @@ class ApplicationFactory:
     @staticmethod
     def _register_error_handlers(app):
         """エラーハンドラーの登録"""
+        from flask import request, render_template
+        
         @app.errorhandler(404)
         def not_found(error):
-            app.logger.warning(f"404エラー: {app.request.url}")
-            return app.render_template('error.html', 
-                                     error_code=404, 
-                                     error_message="ページが見つかりません"), 404
+            app.logger.warning(f"404エラー: {request.url}")
+            return render_template('error.html', 
+                                 error_code=404, 
+                                 error_message="ページが見つかりません"), 404
 
         @app.errorhandler(500)
         def internal_error(error):
             app.logger.error(f"500エラー: {error}")
-            return app.render_template('error.html', 
-                                     error_code=500, 
-                                     error_message="内部サーバーエラーが発生しました"), 500
+            return render_template('error.html', 
+                                 error_code=500, 
+                                 error_message="内部サーバーエラーが発生しました"), 500
 
         @app.errorhandler(400)
         def bad_request(error):
             app.logger.warning(f"400エラー: {error}")
-            return app.render_template('error.html',
-                                     error_code=400,
-                                     error_message="不正なリクエストです"), 400
+            return render_template('error.html',
+                                 error_code=400,
+                                 error_message="不正なリクエストです"), 400
 
         @app.errorhandler(403)
         def forbidden(error):
             app.logger.warning(f"403エラー: {error}")
-            return app.render_template('error.html',
-                                     error_code=403,
-                                     error_message="アクセスが拒否されました"), 403
+            return render_template('error.html',
+                                 error_code=403,
+                                 error_message="アクセスが拒否されました"), 403
 
         @app.errorhandler(Exception)
         def handle_exception(e):
             app.logger.error(f"予期しないエラー: {e}")
-            return app.render_template('error.html',
-                                     error_code=500,
-                                     error_message="予期しないエラーが発生しました"), 500
+            return render_template('error.html',
+                                 error_code=500,
+                                 error_message="予期しないエラーが発生しました"), 500
     
     @staticmethod
     def _register_template_filters(app):
@@ -238,6 +241,14 @@ class ApplicationFactory:
                 return "warning"
             else:
                 return "danger"
+
+        @app.template_filter('chr')
+        def chr_filter(value):
+            """数値を文字に変換するフィルター"""
+            try:
+                return chr(int(value))
+            except (ValueError, TypeError):
+                return str(value)
 
 # アプリケーション作成
 app = ApplicationFactory.create_app()
