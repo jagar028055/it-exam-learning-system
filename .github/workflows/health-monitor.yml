@@ -13,7 +13,7 @@ jobs:
     - name: Keep service alive
       run: |
         echo "Pinging service to keep it alive..."
-        response=$(curl -s -o /dev/null -w "%{http_code}" https://itexam-study-system.onrender.com/healthz)
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://itexam-study-system.onrender.com/health)
         echo "Health check response: $response"
         
         if [ "$response" = "200" ]; then
@@ -32,7 +32,7 @@ jobs:
           const body = `## ヘルスチェックが失敗しました
           
           **時刻**: ${new Date().toISOString()}
-          **URL**: https://itexam-study-system.onrender.com/healthz
+          **URL**: https://itexam-study-system.onrender.com/health
           **ワークフロー**: ${context.workflow}
           **実行ID**: ${context.runId}
           
