@@ -312,20 +312,20 @@
             <!-- Breadcrumb Navigation -->
             {% block breadcrumb %}
             {% set breadcrumbs = [] %}
-            {% if request.endpoint == 'index' %}
-                {% set breadcrumbs = [('ホーム', url_for('index'))] %}
-            {% elif request.endpoint == 'study' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study'))] %}
-            {% elif request.endpoint == 'question' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study')), ('問題', None)] %}
-            {% elif request.endpoint == 'session_result' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('学習', url_for('study')), ('結果', None)] %}
-            {% elif request.endpoint == 'progress' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('進捗', url_for('progress'))] %}
-            {% elif request.endpoint == 'reports' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('レポート', url_for('reports'))] %}
-            {% elif request.endpoint == 'settings' %}
-                {% set breadcrumbs = [('ホーム', url_for('index')), ('設定', url_for('settings'))] %}
+            {% if request.endpoint == 'main.index' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index'))] %}
+            {% elif request.endpoint == 'study.study' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study'))] %}
+            {% elif request.endpoint == 'study.question' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study')), ('問題', None)] %}
+            {% elif request.endpoint == 'study.session_result' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study')), ('結果', None)] %}
+            {% elif request.endpoint == 'progress.progress' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('進捗', url_for('progress.progress'))] %}
+            {% elif request.endpoint == 'progress.reports' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('レポート', url_for('progress.reports'))] %}
+            {% elif request.endpoint == 'settings.settings' %}
+                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('設定', url_for('settings.settings'))] %}
             {% endif %}
             
             {% if breadcrumbs|length > 1 %}

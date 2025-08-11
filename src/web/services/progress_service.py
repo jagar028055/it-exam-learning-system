@@ -32,14 +32,40 @@ class ProgressService:
             # 時系列進捗を取得
             progress_over_time = self.db.get_progress_over_time(exam_type, days)
             
+            # 統計データが空またはリストの場合のデフォルト値
+            if not stats or isinstance(stats, list):
+                stats = {
+                    'total_questions': 0,
+                    'total_correct': 0,
+                    'overall_correct_rate': 0.0,
+                    'categories_studied': 0
+                }
+            
+            # テンプレートが期待する構造に合わせる
             return {
+                'overall_statistics': stats,
                 'statistics': stats,
-                'weak_areas': weak_areas,
-                'progress_over_time': progress_over_time
+                'weak_areas': weak_areas if weak_areas else [],
+                'progress_over_time': progress_over_time if progress_over_time else []
             }
         except Exception as e:
             logger.error(f"進捗データ取得エラー: {e}")
-            return {}
+            return {
+                'overall_statistics': {
+                    'total_questions': 0,
+                    'total_correct': 0,
+                    'overall_correct_rate': 0.0,
+                    'categories_studied': 0
+                },
+                'statistics': {
+                    'total_questions': 0,
+                    'total_correct': 0,
+                    'overall_correct_rate': 0.0,
+                    'categories_studied': 0
+                },
+                'weak_areas': [],
+                'progress_over_time': []
+            }
     
     def get_report_files(self) -> List[Dict]:
         """レポートファイル一覧を取得"""
