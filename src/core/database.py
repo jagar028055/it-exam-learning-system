@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from contextlib import contextmanager
 
 from .config import config
+from .cache_manager import cached_service, cache_manager
 from ..utils.utils import Logger, FileUtils, ValidationUtils, DataError
 
 class DatabaseManager:
@@ -423,6 +424,9 @@ class DatabaseManager:
             # 統計を更新
             self._update_statistics(conn, question_id, is_correct, response_time)
             
+            # 関連キャッシュを無効化
+            self._invalidate_related_cache()
+            
             return record_id
     
     def get_learning_records(self, question_id: int = None, 
@@ -551,8 +555,9 @@ class DatabaseManager:
             conn.commit()
     
     # 統計・分析関連
+    @cached_service.cached_method(ttl=300, key_prefix="stats")  # 5分キャッシュ
     def get_statistics(self, exam_type: str = None) -> Dict:
-        """統計情報を取得"""
+        """統計情報を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -582,8 +587,9 @@ class DatabaseManager:
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
     
+    @cached_service.cached_method(ttl=600, key_prefix="weak")  # 10分キャッシュ
     def get_weak_areas(self, exam_type: str = None, limit: int = 5) -> List[Dict]:
-        """弱点分野を取得"""
+        """弱点分野を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -612,8 +618,9 @@ class DatabaseManager:
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
     
+    @cached_service.cached_method(ttl=1800, key_prefix="progress")  # 30分キャッシュ
     def get_progress_over_time(self, exam_type: str = None, days: int = 30) -> List[Dict]:
-        """時系列での進捗を取得"""
+        """時系列での進捗を取得（キャッシュ機能付き）"""
         with self.get_connection() as conn:
             sql = """
                 SELECT 
@@ -636,6 +643,28 @@ class DatabaseManager:
             
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
+    
+    def _invalidate_related_cache(self):
+        """関連キャッシュを無効化"""
+        try:
+            cached_service.invalidate_cache("stats:*")
+            cached_service.invalidate_cache("weak:*") 
+            cached_service.invalidate_cache("progress:*")
+            self.logger.debug("関連キャッシュを無効化しました")
+        except Exception as e:
+            self.logger.warning(f"キャッシュ無効化に失敗: {e}")
+    
+    def clear_all_cache(self):
+        """すべてのキャッシュをクリア"""
+        try:
+            cache_manager.clear()
+            self.logger.info("全キャッシュをクリアしました")
+        except Exception as e:
+            self.logger.error(f"キャッシュクリアに失敗: {e}")
+    
+    def get_cache_stats(self) -> Dict:
+        """キャッシュ統計を取得"""
+        return cache_manager.get_stats()
     
     # ユーティリティメソッド
     def _get_exam_category_id(self, conn: sqlite3.Connection, exam_code: str) -> int:
@@ -782,6 +811,198 @@ class DatabaseManager:
                 'indexes': indexes,
                 'table_stats': table_stats
             }
+    
+    # N+1クエリ問題解消のための最適化メソッド
+    def get_questions_with_stats(self, exam_type: str = None, category: str = None, 
+                                limit: int = None) -> List[Dict]:
+        """問題を統計情報と一緒に効率的に取得（N+1問題解消）"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT 
+                    q.id, q.question_text, q.choices, q.correct_answer, q.explanation,
+                    q.category, q.subcategory, q.difficulty_level, q.year, q.question_number,
+                    ec.name as exam_name, ec.code as exam_code,
+                    COALESCE(lr_stats.total_attempts, 0) as total_attempts,
+                    COALESCE(lr_stats.correct_attempts, 0) as correct_attempts,
+                    COALESCE(lr_stats.avg_response_time, 0) as avg_response_time,
+                    CASE 
+                        WHEN lr_stats.total_attempts > 0 
+                        THEN ROUND(lr_stats.correct_attempts * 100.0 / lr_stats.total_attempts, 1)
+                        ELSE 0 
+                    END as success_rate
+                FROM questions q
+                JOIN exam_categories ec ON q.exam_category_id = ec.id
+                LEFT JOIN (
+                    SELECT 
+                        question_id,
+                        COUNT(*) as total_attempts,
+                        SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_attempts,
+                        AVG(response_time) as avg_response_time
+                    FROM learning_records 
+                    GROUP BY question_id
+                ) lr_stats ON q.id = lr_stats.question_id
+                WHERE 1=1
+            """
+            params = []
+            
+            if exam_type:
+                sql += " AND ec.code = ?"
+                params.append(exam_type)
+            
+            if category:
+                sql += " AND q.category = ?"
+                params.append(category)
+            
+            sql += " ORDER BY q.year DESC, q.question_number ASC"
+            
+            if limit:
+                sql += " LIMIT ?"
+                params.append(limit)
+            
+            cursor = conn.execute(sql, params)
+            questions = []
+            
+            for row in cursor.fetchall():
+                question = dict(row)
+                # JSONの選択肢を配列に変換
+                if question['choices']:
+                    try:
+                        question['choices'] = json.loads(question['choices'])
+                    except json.JSONDecodeError:
+                        question['choices'] = []
+                questions.append(question)
+            
+            return questions
+    
+    def bulk_record_answers(self, answer_records: List[Dict]) -> List[int]:
+        """回答を一括で記録（N+1問題解消）"""
+        if not answer_records:
+            return []
+        
+        with self.get_connection() as conn:
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                
+                # 回答記録を一括挿入
+                record_ids = []
+                for record in answer_records:
+                    cursor = conn.execute("""
+                        INSERT INTO learning_records (
+                            question_id, user_answer, is_correct, response_time, 
+                            study_mode, notes
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        record['question_id'],
+                        record['user_answer'], 
+                        record['is_correct'],
+                        record.get('response_time'),
+                        record.get('study_mode', 'practice'),
+                        record.get('notes')
+                    ))
+                    record_ids.append(cursor.lastrowid)
+                
+                # 統計を一括更新
+                self._batch_update_statistics(conn, answer_records)
+                
+                conn.execute("COMMIT")
+                return record_ids
+                
+            except Exception as e:
+                conn.execute("ROLLBACK")
+                self.logger.error(f"一括回答記録エラー: {e}")
+                raise
+    
+    def _batch_update_statistics(self, conn: sqlite3.Connection, answer_records: List[Dict]):
+        """統計情報を一括更新"""
+        # 問題情報を一度に取得
+        question_ids = [r['question_id'] for r in answer_records]
+        if not question_ids:
+            return
+            
+        placeholders = ','.join(['?'] * len(question_ids))
+        
+        cursor = conn.execute(f"""
+            SELECT id, category, exam_category_id
+            FROM questions 
+            WHERE id IN ({placeholders})
+        """, question_ids)
+        
+        question_info = {row['id']: row for row in cursor.fetchall()}
+        
+        # カテゴリ別統計更新データを集計
+        stats_updates = {}
+        for record in answer_records:
+            question_id = record['question_id']
+            if question_id not in question_info:
+                continue
+            
+            q_info = question_info[question_id]
+            key = (q_info['exam_category_id'], q_info['category'])
+            
+            if key not in stats_updates:
+                stats_updates[key] = {
+                    'total_questions': 0,
+                    'correct_answers': 0,
+                    'incorrect_answers': 0,
+                    'total_response_time': 0,
+                    'count': 0
+                }
+            
+            stats = stats_updates[key]
+            stats['total_questions'] += 1
+            stats['correct_answers'] += 1 if record['is_correct'] else 0
+            stats['incorrect_answers'] += 0 if record['is_correct'] else 1
+            
+            if record.get('response_time'):
+                stats['total_response_time'] += record['response_time']
+                stats['count'] += 1
+        
+        # 統計テーブルを更新
+        for (exam_category_id, category), updates in stats_updates.items():
+            avg_response_time = None
+            if updates['count'] > 0:
+                avg_response_time = updates['total_response_time'] / updates['count']
+            
+            # 既存レコードを更新または新規作成
+            cursor = conn.execute("""
+                SELECT id, total_questions, correct_answers, incorrect_answers, average_response_time
+                FROM study_statistics
+                WHERE exam_category_id = ? AND category = ?
+            """, (exam_category_id, category))
+            
+            existing = cursor.fetchone()
+            if existing:
+                # 既存レコードを更新
+                new_total = existing['total_questions'] + updates['total_questions']
+                new_correct = existing['correct_answers'] + updates['correct_answers']
+                new_incorrect = existing['incorrect_answers'] + updates['incorrect_answers']
+                
+                # 平均応答時間を再計算
+                if avg_response_time and existing['average_response_time']:
+                    weighted_avg = (
+                        existing['average_response_time'] * existing['total_questions'] +
+                        avg_response_time * updates['total_questions']
+                    ) / new_total
+                else:
+                    weighted_avg = avg_response_time or existing['average_response_time']
+                
+                conn.execute("""
+                    UPDATE study_statistics
+                    SET total_questions = ?, correct_answers = ?, incorrect_answers = ?,
+                        average_response_time = ?, last_study_date = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (new_total, new_correct, new_incorrect, weighted_avg, existing['id']))
+            else:
+                # 新規レコードを作成
+                conn.execute("""
+                    INSERT INTO study_statistics (
+                        exam_category_id, category, total_questions, correct_answers,
+                        incorrect_answers, average_response_time, last_study_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (exam_category_id, category, updates['total_questions'],
+                      updates['correct_answers'], updates['incorrect_answers'],
+                      avg_response_time))
     
     # 学習セッション管理
     def create_study_session(self, session_name: str, exam_type: str, study_mode: str, total_questions: int) -> int:

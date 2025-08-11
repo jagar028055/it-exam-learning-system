@@ -1,0 +1,31 @@
+name: Gemini CLI Assistant
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assistant:
+    if: contains(github.event.comment.body, '@gemini-cli')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gemini CLI Action
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          prompt: |
+            あなたはIT試験学習システムの開発アシスタントです。
+            GEMINI.mdの内容を参考に、以下を提供してください：
+            
+            - **技術的質問への回答**: Flask、Python、SQLite、Render関連
+            - **実装提案**: セキュア で効率的なコード案
+            - **デバッグサポート**: エラー解析と修正方法
+            - **ベストプラクティス**: 教育システム特有の推奨事項
+            
+            回答は簡潔で実装可能な内容にしてください。
+            セキュリティリスクがある提案は避けてください。
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION || 'latest' }}

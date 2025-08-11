@@ -6,13 +6,16 @@
     <title>{% block title %}情報技術者試験学習システム{% endblock %}</title>
     
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Plotly -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" crossorigin="anonymous">
+    
+    <!-- Performance optimizations -->
+    <link rel="preload" href="/static/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/styles.css"></noscript>
+    
+    <!-- Conditional script loading for better performance -->
+    {% block conditional_scripts %}{% endblock %}
     
     <!-- Import template components -->
     {% from 'components/navigation.html' import render_nav, render_breadcrumb %}
@@ -22,280 +25,96 @@
     {% from 'components/questions.html' import render_question_card, render_question_list, render_question_filters, render_pagination %}
     
     <style>
+        /* Bootstrapとの統合用CSS - 競合回避とカスタマイズ */
         :root {
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --success-color: #28a745;
-            --info-color: #17a2b8;
-            --warning-color: #ffc107;
-            --danger-color: #dc3545;
-            --light-color: #f8f9fa;
-            --dark-color: #343a40;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --shadow-light: 0 4px 15px rgba(0,0,0,0.1);
+            --shadow-hover: 0 8px 25px rgba(0,0,0,0.15);
+            --border-radius-lg: 15px;
+            --transition: all 0.3s ease;
         }
         
+        /* 背景とレイアウト */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary-gradient);
             min-height: 100vh;
         }
         
+        /* ナビゲーションバー */
         .navbar {
             background: rgba(255, 255, 255, 0.95) !important;
             backdrop-filter: blur(10px);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-light);
         }
         
         .navbar-brand {
             font-weight: bold;
-            color: var(--primary-color) !important;
+            color: #667eea !important;
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--primary-gradient);
             color: white !important;
             border-radius: 20px;
-            font-weight: bold;
         }
         
-        .nav-link {
-            transition: all 0.3s ease;
-            margin: 0 5px;
-            border-radius: 20px;
-        }
-        
-        .nav-link:hover {
-            background: rgba(102, 126, 234, 0.1);
-            transform: translateY(-1px);
-        }
-        
+        /* メインコンテンツエリア */
         .main-content {
             background: white;
             min-height: calc(100vh - 76px);
             margin-top: 76px;
-            border-radius: 20px 20px 0 0;
+            border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
             padding: 30px;
             box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
         }
         
+        /* カードコンポーネント */
         .card {
             border: none;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-light);
+            transition: var(--transition);
         }
         
         .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-hover);
         }
         
         .card-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--primary-gradient);
             color: white;
-            border-radius: 15px 15px 0 0 !important;
-            padding: 20px;
+            border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
         }
         
+        /* ボタンスタイル */
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--primary-gradient);
             border: none;
             border-radius: 25px;
-            padding: 10px 25px;
-            font-weight: bold;
-            transition: all 0.3s ease;
+            transition: var(--transition);
         }
         
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-light);
         }
         
-        .stat-card {
-            text-align: center;
-            padding: 25px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-3px);
-        }
-        
-        .stat-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        
-        .stat-label {
-            font-size: 0.9em;
-            color: #6c757d;
-        }
-        
-        .progress {
-            height: 25px;
-            border-radius: 15px;
-            overflow: hidden;
-        }
-        
-        .progress-bar {
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            border-radius: 15px;
-            transition: width 0.8s ease;
-        }
-        
-        .alert {
-            border: none;
-            border-radius: 15px;
-            padding: 15px 20px;
-        }
-        
-        .breadcrumb {
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 15px;
-            padding: 10px 20px;
-            margin-bottom: 0;
-        }
-        
-        .breadcrumb-item a {
-            color: var(--primary-color);
-            transition: color 0.3s ease;
-        }
-        
-        .breadcrumb-item a:hover {
-            color: var(--secondary-color);
-        }
-        
-        .breadcrumb-item.active {
-            color: var(--dark-color);
+        /* 統計カード */
+        .stat-card .stat-value {
+            font-size: 2.5rem;
             font-weight: bold;
         }
         
-        .footer {
-            background: rgba(52, 58, 64, 0.9);
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            margin-top: 50px;
-        }
-        
-        .question-card {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        }
-        
-        .choice-btn {
-            width: 100%;
-            text-align: left;
-            margin-bottom: 10px;
-            padding: 15px 20px;
-            border: 2px solid #dee2e6;
-            border-radius: 10px;
-            background: white;
-            transition: all 0.3s ease;
-        }
-        
-        .choice-btn:hover {
-            border-color: var(--primary-color);
-            background: rgba(102, 126, 234, 0.1);
-        }
-        
-        .choice-btn.selected {
-            border-color: var(--primary-color);
-            background: var(--primary-color);
-            color: white;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
-        
+        /* レスポンシブ対応 */
         @media (max-width: 768px) {
             .main-content {
                 margin-top: 70px;
                 padding: 20px;
-                border-radius: 15px 15px 0 0;
             }
             
-            .stat-value {
-                font-size: 2em;
-            }
-            
-            .navbar-nav {
-                background: white;
-                border-radius: 15px;
-                padding: 10px;
-                margin-top: 10px;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            }
-            
-            .nav-link {
-                padding: 12px 15px !important;
-                margin: 5px 0;
-                text-align: center;
-                font-size: 1.1em;
-            }
-            
-            .nav-link.active {
-                border-radius: 10px;
-            }
-            
-            .breadcrumb {
-                font-size: 0.9em;
-                padding: 8px 15px;
-            }
-            
-            .choice-btn {
-                font-size: 1.1em;
-                padding: 18px 20px;
-                margin-bottom: 15px;
-            }
-            
-            .btn-lg {
-                padding: 15px 30px;
-                font-size: 1.2em;
-            }
-            
-            .card {
-                margin-bottom: 20px;
-            }
-            
-            .stat-card {
-                margin-bottom: 15px;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .navbar-brand {
-                font-size: 1rem;
-            }
-            
-            .display-5 {
-                font-size: 1.8rem;
-            }
-            
-            .lead {
-                font-size: 1rem;
-            }
-            
-            .choice-btn {
-                font-size: 1rem;
-                padding: 15px 18px;
-            }
-            
-            .breadcrumb-item {
-                font-size: 0.8em;
+            .stat-card .stat-value {
+                font-size: 2rem;
             }
         }
     </style>
@@ -304,50 +123,52 @@
 </head>
 <body>
     <!-- Navigation using component -->
-    {{ render_nav(request.endpoint.split('.')[0] if request.endpoint else '') }}
+    {{ render_nav(request.endpoint.split('.')[0] if request.endpoint else 'main') }}
     
     <!-- Main Content -->
     <div class="main-content">
         <div class="container">
             <!-- Breadcrumb Navigation -->
             {% block breadcrumb %}
-            {% set breadcrumbs = [] %}
+            {% set breadcrumb_items = [] %}
             {% if request.endpoint == 'main.index' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index'))] %}
+                {% set breadcrumb_items = [{'title': 'ホーム', 'url': url_for('main.index')}] %}
             {% elif request.endpoint == 'study.study' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study'))] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': '学習', 'url': url_for('study.study')}
+                ] %}
             {% elif request.endpoint == 'study.question' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study')), ('問題', None)] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': '学習', 'url': url_for('study.study')},
+                    {'title': '問題', 'url': None}
+                ] %}
             {% elif request.endpoint == 'study.session_result' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('学習', url_for('study.study')), ('結果', None)] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': '学習', 'url': url_for('study.study')},
+                    {'title': '結果', 'url': None}
+                ] %}
             {% elif request.endpoint == 'progress.progress' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('進捗', url_for('progress.progress'))] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': '進捗', 'url': url_for('progress.progress')}
+                ] %}
             {% elif request.endpoint == 'progress.reports' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('レポート', url_for('progress.reports'))] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': 'レポート', 'url': url_for('progress.reports')}
+                ] %}
             {% elif request.endpoint == 'settings.settings' %}
-                {% set breadcrumbs = [('ホーム', url_for('main.index')), ('設定', url_for('settings.settings'))] %}
+                {% set breadcrumb_items = [
+                    {'title': 'ホーム', 'url': url_for('main.index')},
+                    {'title': '設定', 'url': url_for('settings.settings')}
+                ] %}
             {% endif %}
             
-            {% if breadcrumbs|length > 1 %}
-            <nav aria-label="breadcrumb" class="mb-4">
-                <ol class="breadcrumb">
-                    {% for name, url in breadcrumbs %}
-                        {% if url %}
-                            <li class="breadcrumb-item">
-                                <a href="{{ url }}" class="text-decoration-none">
-                                    <i class="fas fa-{{ 'home' if loop.first else 'chevron-right' }} me-1"></i>
-                                    {{ name }}
-                                </a>
-                            </li>
-                        {% else %}
-                            <li class="breadcrumb-item active" aria-current="page">
-                                <i class="fas fa-chevron-right me-1"></i>
-                                {{ name }}
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-                </ol>
-            </nav>
+            {% if breadcrumb_items|length > 1 %}
+                {{ render_breadcrumb(breadcrumb_items) }}
             {% endif %}
             {% endblock %}
             
@@ -368,7 +189,69 @@
     </footer>
     
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    
+    <!-- Performance monitoring -->
+    <script>
+        // ページパフォーマンス測定
+        window.addEventListener('load', function() {
+            if ('performance' in window && 'timing' in window.performance) {
+                const timing = window.performance.timing;
+                const loadTime = timing.loadEventEnd - timing.navigationStart;
+                const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
+                
+                // パフォーマンスメトリクスを送信（必要に応じて）
+                if (loadTime > 3000) {
+                    console.warn('Page load time exceeded 3s:', loadTime + 'ms');
+                }
+                
+                // メモリ使用量チェック（対応ブラウザのみ）
+                if ('memory' in performance) {
+                    const memory = performance.memory;
+                    if (memory.usedJSHeapSize > 50 * 1024 * 1024) { // 50MB
+                        console.warn('High memory usage:', Math.round(memory.usedJSHeapSize / 1024 / 1024) + 'MB');
+                    }
+                }
+            }
+        });
+        
+        // Service Worker registration for PWA features
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
+                    console.log('SW registered:', registration.scope);
+                }).catch(function(registrationError) {
+                    console.log('SW registration failed:', registrationError);
+                });
+            });
+        }
+    </script>
+    
+    <!-- CSRF Token -->
+    <script>
+        window.csrfToken = '{{ csrf_token() }}';
+        
+        // AJAX用CSRF設定
+        if (typeof $ !== 'undefined') {
+            $.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                        xhr.setRequestHeader("X-CSRFToken", window.csrfToken);
+                    }
+                }
+            });
+        }
+        
+        // Fetch API用CSRF設定
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            if (options.method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(options.method.toUpperCase())) {
+                options.headers = options.headers || {};
+                options.headers['X-CSRFToken'] = window.csrfToken;
+            }
+            return originalFetch(url, options);
+        };
+    </script>
     
     <!-- Common JavaScript -->
     <script>
@@ -434,6 +317,15 @@
         document.addEventListener('DOMContentLoaded', function() {
             const forms = document.querySelectorAll('form');
             forms.forEach(form => {
+                // CSRFトークンを自動追加
+                if (form.method.toLowerCase() === 'post' && !form.querySelector('input[name="csrf_token"]')) {
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrf_token';
+                    csrfInput.value = window.csrfToken;
+                    form.appendChild(csrfInput);
+                }
+                
                 form.addEventListener('submit', function() {
                     showLoading();
                 });
