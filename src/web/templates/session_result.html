@@ -213,31 +213,31 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                                <a href="{{ url_for('index') }}" class="btn btn-outline-primary w-100">
+                                <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary w-100">
                                     <i class="fas fa-home"></i><br>
                                     メニューに戻る
                                 </a>
                             </div>
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                                <a href="{{ url_for('study') }}" class="btn btn-primary w-100">
+                                <a href="{{ url_for('study.study') }}" class="btn btn-primary w-100">
                                     <i class="fas fa-redo"></i><br>
                                     再学習
                                 </a>
                             </div>
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                                <a href="{{ url_for('study') }}?mode=weak_area" class="btn btn-warning w-100">
+                                <a href="{{ url_for('study.study') }}?mode=weak_area" class="btn btn-warning w-100">
                                     <i class="fas fa-target"></i><br>
                                     弱点克服
                                 </a>
                             </div>
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                                <a href="{{ url_for('progress') }}" class="btn btn-info w-100">
+                                <a href="{{ url_for('progress.progress') }}" class="btn btn-info w-100">
                                     <i class="fas fa-chart-line"></i><br>
                                     進捗確認
                                 </a>
                             </div>
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                                <a href="{{ url_for('reports') }}" class="btn btn-secondary w-100">
+                                <a href="{{ url_for('progress.reports') }}" class="btn btn-secondary w-100">
                                     <i class="fas fa-file-alt"></i><br>
                                     レポート一覧
                                 </a>

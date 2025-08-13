@@ -60,7 +60,7 @@ Thumbs.db
 logs/
 
 # Database (keep structure but not data for demo)
-# data/database.db
+data/database.db
 
 # Temporary files
 tmp/

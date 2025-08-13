@@ -15,8 +15,7 @@
     <noscript><link rel="stylesheet" href="/static/styles.css"></noscript>
     
     <!-- Conditional script loading for better performance -->
-    {% block conditional_scripts %}
-    {% endblock %}
+    {% block conditional_scripts %}{% endblock %}
     
     <!-- Import template components -->
     {% from 'components/navigation.html' import render_nav, render_breadcrumb %}
